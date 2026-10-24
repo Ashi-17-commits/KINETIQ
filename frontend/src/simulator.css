@@ -79,6 +79,7 @@ input[type='range']::-moz-range-thumb { width: 12px; height: 12px; border-radius
 .cad-chips { position: absolute; z-index: 2; left: 14px; top: 12px; display: flex; gap: 10px; align-items: center; }
 .chip { padding: 5px 10px; font-size: 11.5px; border-radius: 6px; background: rgba(205, 181, 126, 0.14); color: var(--gold-hi); border: 1px solid rgba(205, 181, 126, 0.3); }
 .chip-meta { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
+.chip-meta.fallback { color: var(--warn); font-weight: 600; }
 .cad-stage { position: relative; width: 100%; max-width: 980px; margin: 0 auto; aspect-ratio: 1500 / 957; }
 .cad-img { width: 100%; height: 100%; display: block; object-fit: contain;
   -webkit-mask-image: radial-gradient(62% 62% at 50% 50%, #000 70%, transparent 100%); mask-image: radial-gradient(62% 62% at 50% 50%, #000 70%, transparent 100%);

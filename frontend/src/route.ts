@@ -6,6 +6,7 @@
  *  - "Routed by service": POST /api/route when VITE_API_URL is set.
  */
 import { DEFAULT_VEHICLE, type Conditions } from './engine.ts';
+import type { ResultSource } from './api.ts';
 import { planRoute, runSimulation, ROUTING_AVAILABLE, SimError, type RouteRequest } from './api.ts';
 import { lineChart } from './charts.ts';
 import { ROUTE_SAMPLE } from './sampleData.ts';
@@ -13,7 +14,7 @@ import { SAMPLE_BADGE, icon } from './shell.ts';
 
 type Source = 'sample' | 'engine' | 'service';
 interface Estimate {
-  source: Source; distanceKm: number; durationMin: number; energyKwh: number;
+  source: Source; distanceKm: number; durationMin: number; energyKwh: number; capacityKwh: number; engine?: ResultSource;
   elevationGainM: number | null; elevation?: { km: number; m: number }[]; note?: string;
 }
 
@@ -21,15 +22,16 @@ const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector
 const fmt = (n: number, d = 0) => n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const hm = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${Math.round(m % 60)} min` : `${Math.round(m)} min`);
-const CAPACITY = DEFAULT_VEHICLE.capacityKwh;
+const SAMPLE_CAPACITY = DEFAULT_VEHICLE.capacityKwh;
+const ENGINE_NAME: Record<ResultSource, string> = { api: 'FastAPI', local: 'local engine', 'local-fallback': 'local FALLBACK' };
 
 const SAMPLE: Estimate = {
-  source: 'sample', distanceKm: ROUTE_SAMPLE.distanceKm, durationMin: ROUTE_SAMPLE.travelMin,
+  source: 'sample', capacityKwh: SAMPLE_CAPACITY, distanceKm: ROUTE_SAMPLE.distanceKm, durationMin: ROUTE_SAMPLE.travelMin,
   energyKwh: ROUTE_SAMPLE.energyKwh, elevationGainM: ROUTE_SAMPLE.elevationGainM,
   elevation: ROUTE_SAMPLE.elevation.map(([km, m]) => ({ km, m })),
 };
-const badge = (s: Source) => (s === 'sample' ? SAMPLE_BADGE
-  : `<span class="sample-badge live">${s === 'engine' ? 'From entered distance' : 'Routed by service'}</span>`);
+const badge = (e: Estimate) => (e.source === 'sample' ? SAMPLE_BADGE
+  : `<span class="sample-badge live">${e.source === 'engine' ? `From entered distance · ${ENGINE_NAME[e.engine ?? 'local']}` : 'Routed by service'}</span>`);
 
 let current: Estimate | null = SAMPLE;
 
@@ -88,16 +90,16 @@ export function initRoute(getConditions: () => Conditions) {
         };
         const r = await planRoute(req, c.signal);
         const gain = r.elevation ? r.elevation.reduce((g, p, i, a) => g + (i ? Math.max(0, p.m - a[i - 1].m) : 0), 0) : null;
-        est = { source: 'service', distanceKm: r.distanceKm, durationMin: r.durationMin, energyKwh: r.energyKwh, elevationGainM: gain, elevation: r.elevation };
+        est = { source: 'service', capacityKwh: SAMPLE_CAPACITY, distanceKm: r.distanceKm, durationMin: r.durationMin, energyKwh: r.energyKwh, elevationGainM: gain, elevation: r.elevation };
       } else {
         const dist = Number(fd.get('routeDistanceKm'));
         const grade = Number(fd.get('routeGradePct') || 0);
         if (!Number.isFinite(dist) || dist < 1 || dist > 1000) {
           throw new SimError('No routing service is connected. Enter a known route distance (1–1000 km) to estimate energy.');
         }
-        const { result } = await runSimulation({ ...conditions, distanceKm: dist, gradePct: Math.max(-8, Math.min(8, grade)) }, c.signal);
+        const { result, source } = await runSimulation({ ...conditions, distanceKm: dist, gradePct: Math.max(-8, Math.min(8, grade)) }, c.signal);
         est = {
-          source: 'engine', distanceKm: dist, durationMin: result.durationMin, energyKwh: result.energyKwh, elevationGainM: null,
+          source: 'engine', engine: source, capacityKwh: result.usableKwh, distanceKm: dist, durationMin: result.durationMin, energyKwh: result.energyKwh, elevationGainM: null,
           note: `Estimate for ${start} → ${end} uses your entered distance and Drive settings; the path itself is not calculated.`,
         };
       }
@@ -122,7 +124,7 @@ function render() {
 
 function renderSummary() {
   const e = current;
-  $('#sum-src').innerHTML = e ? badge(e.source) : '';
+  $('#sum-src').innerHTML = e ? badge(e) : '';
   const rows: [string, string, string][] = [
     ['pin', 'Distance', e ? `${fmt(e.distanceKm)} km` : '—'],
     ['clock', 'Est. Travel Time', e ? hm(e.durationMin) : '—'],
@@ -135,6 +137,7 @@ function renderSummary() {
 function renderBattery() {
   const box = $('#battery-est');
   const pct = Number($<HTMLInputElement>('#r-soc').value);
+  const CAPACITY = current?.capacityKwh ?? SAMPLE_CAPACITY;
   const nowKwh = (pct / 100) * CAPACITY;
   if (!current) { box.innerHTML = '<p class="hint">No estimate available.</p>'; return; }
   const arrival = ((nowKwh - current.energyKwh) / CAPACITY) * 100;
@@ -148,13 +151,13 @@ function renderBattery() {
       <div><dt>Predicted Battery on Arrival</dt><dd class="${level}">${arrivalTxt}</dd></div>
     </dl>
     ${arrival < 15 ? `<p class="bat-warn">${icon('warn')}Recommended to charge before departure or stop at a charging station.</p>` : ''}
-    <p class="hint">Reference vehicle, ${CAPACITY} kWh usable capacity at 20 °C.</p>`;
+    <p class="hint">${current.source === 'sample' ? 'Sample uses' : `Same engine as the energy figure (${ENGINE_NAME[current.engine ?? 'local']}):`} ${fmt(CAPACITY, 1)} kWh usable capacity.</p>`;
 }
 
 function renderElevation() {
   const body = $('#elev-body');
   const pts = current?.elevation;
-  $('#elev-src').innerHTML = pts && current ? badge(current.source) : '';
+  $('#elev-src').innerHTML = pts && current ? badge(current) : '';
   if (!pts || pts.length < 2) {
     body.innerHTML = `<p class="elev-empty">${ROUTING_AVAILABLE ? 'The routing service returned no elevation data.' : 'Elevation data requires a connected routing service.'}</p>`;
     return;

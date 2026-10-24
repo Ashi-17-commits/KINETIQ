@@ -1,8 +1,8 @@
 import './styles.css';
 import './simulator.css';
 import './pages.css';
-import { DEFAULT_CONDITIONS, DEFAULT_VEHICLE, type Conditions, type Result, type Recommendation } from './engine.ts';
-import { runSimulation, ENGINE_SOURCE, SimError } from './api.ts';
+import { DEFAULT_CONDITIONS, type Conditions, type Result, type Recommendation } from './engine.ts';
+import { runSimulation, ENGINE_SOURCE, SimError, type ResultSource, type SimVehicle } from './api.ts';
 import { initRoute } from './route.ts';
 
 type Field =
@@ -44,6 +44,22 @@ let current: Conditions = { ...DEFAULT_CONDITIONS };
 let result: Result | null = null;
 let recs: Recommendation[] = [];
 let baseline: Result | null = null;
+let baselineSource: ResultSource | null = null;
+let resultSource: ResultSource | null = null;
+
+const ENGINE_LABEL: Record<ResultSource, string> = {
+  api: 'Engine · FastAPI backend',
+  local: 'Engine · in-browser (deterministic)',
+  'local-fallback': 'Engine · in-browser FALLBACK (backend unavailable)',
+};
+function showEngine(src: ResultSource, v: SimVehicle, reason?: string) {
+  const chip = $('#engine-src');
+  chip.textContent = ENGINE_LABEL[src];
+  chip.classList.toggle('fallback', src === 'local-fallback');
+  chip.title = src === 'local-fallback' && reason ? reason : '';
+  const note = document.getElementById('vehicle-note');
+  if (note) note.textContent = `Vehicle used by ${src === 'api' ? 'the FastAPI backend' : 'the in-browser engine'}: ${fmt(v.massKg)} kg, ${fmt(v.capacityKwh, 1)} kWh usable.`;
+}
 let controller: AbortController | null = null;
 
 const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!;
@@ -59,7 +75,7 @@ function buildControls() {
   form.innerHTML = TABS.map((t, i) => `
     <div class="pane" role="tabpanel" id="pane-${t.id}" aria-labelledby="tab-${t.id}" ${i === 1 ? '' : 'hidden'}>
       ${t.fields.map(fieldHtml).join('')}
-      ${t.id === 'vehicle' ? `<p class="vehicle-note">Reference vehicle: ${fmt(DEFAULT_VEHICLE.massKg)} kg, C<sub>d</sub> ${DEFAULT_VEHICLE.cd}, ${DEFAULT_VEHICLE.capacityKwh} kWh pack, ${DEFAULT_VEHICLE.maxMotorKw} kW motor.</p>` : ''}
+      ${t.id === 'vehicle' ? '<p class="vehicle-note" id="vehicle-note">Vehicle parameters come from the engine that runs the simulation.</p>' : ''}
     </div>`).join('');
 
   tabs.addEventListener('click', (e) => {
@@ -153,12 +169,24 @@ async function run() {
   const ctrl = (controller = new AbortController());
   setStatus('loading');
   try {
-    if (!baseline) baseline = (await runSimulation(DEFAULT_CONDITIONS, ctrl.signal)).result;
     const res = await runSimulation(current, ctrl.signal);
+    // Baseline must come from the same engine as the current result: never compare across engines.
+    if (!baseline || baselineSource !== res.source) {
+      try {
+        baseline = (await runSimulation(DEFAULT_CONDITIONS, ctrl.signal, { source: res.source })).result;
+        baselineSource = res.source;
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') throw e;
+        baseline = null;
+        baselineSource = null;
+      }
+    }
     if (ctrl.signal.aborted) return;
     result = res.result;
+    resultSource = res.source;
     recs = res.recommendations;
     setStatus('ready');
+    showEngine(res.source, res.vehicle, res.fallbackReason);
   } catch (e) {
     if ((e as Error).name === 'AbortError') return;
     result = null;
@@ -320,7 +348,7 @@ function applyPreset(name: string) {
 
 buildControls();
 initRoute(() => current);
-$('#engine-src').textContent = ENGINE_SOURCE === 'api' ? 'Engine · FastAPI' : 'Engine · in-browser (deterministic)';
+$('#engine-src').textContent = ENGINE_SOURCE === 'api' ? 'Engine · FastAPI backend (connecting…)' : ENGINE_LABEL.local;
 $<HTMLSelectElement>('#preset').addEventListener('change', (e) => {
   const v = (e.target as HTMLSelectElement).value;
   if (v !== 'custom') applyPreset(v);
@@ -332,8 +360,8 @@ $('#reset-inputs').addEventListener('click', () => {
   syncControls();
   run();
 });
-$('#set-base').addEventListener('click', () => { if (result) { baseline = result; render(); } });
-$('#reset-base').addEventListener('click', () => { baseline = null; run(); });
+$('#set-base').addEventListener('click', () => { if (result) { baseline = result; baselineSource = resultSource; render(); } });
+$('#reset-base').addEventListener('click', () => { baseline = null; baselineSource = null; run(); });
 
 const demo = new URLSearchParams(location.search).get('demo');
 syncControls();

@@ -6,9 +6,12 @@
  *    SimulationResponse is mapped back into the UI's Result using only backend values.
  * API failures are surfaced as errors, never silently replaced with local numbers.
  */
-import { simulate, recommend, type Conditions, type Result, type Recommendation, type Fault } from './engine.ts';
+import { simulate, recommend, DEFAULT_VEHICLE, type Conditions, type Result, type Recommendation, type Fault } from './engine.ts';
 
-export interface SimResponse { result: Result; recommendations: Recommendation[] }
+/** Which engine produced a result. Every value in one SimResponse comes from that engine only. */
+export type ResultSource = 'api' | 'local' | 'local-fallback';
+export interface SimVehicle { massKg: number; capacityKwh: number }
+export interface SimResponse { result: Result; recommendations: Recommendation[]; source: ResultSource; vehicle: SimVehicle; fallbackReason?: string }
 export type EngineSource = 'api' | 'local';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
@@ -61,7 +64,7 @@ const J_PER_KWH = 3.6e6;
 
 /** Backend SimulationResponse → UI Result. Quantities the backend does not model
  *  (regen, acceleration, pack I²R, stop-start trace) are reported as zero, not invented. */
-export function fromApiSimulation(s: ApiSimulation, c: Conditions): SimResponse {
+export function fromApiSimulation(s: ApiSimulation, c: Conditions): Omit<SimResponse, 'source'> {
   const p = s.physics, b = s.battery;
   if (p.consumption_kwh_per_100km == null || !Number.isFinite(p.consumption_kwh_per_100km)) {
     throw new SimError(`Backend could not compute consumption${p.consumption_unavailable_reason ? `: ${p.consumption_unavailable_reason}` : ''}.`);
@@ -107,7 +110,7 @@ export function fromApiSimulation(s: ApiSimulation, c: Conditions): SimResponse 
   const recommendations: Recommendation[] = s.recommendations.map((r) => ({
     title: r.title, detail: `${r.explanation} ${r.suggested_action}`.trim(), savingWhKm: NaN, savingPct: NaN,
   }));
-  return { result, recommendations };
+  return { result, recommendations, vehicle: { massKg: s.vehicle_parameters.mass_kg, capacityKwh: capacity } };
 }
 
 function isApiSimulation(x: unknown): x is ApiSimulation {
@@ -124,11 +127,33 @@ function detailText(detail: unknown): string {
   return '';
 }
 
-export async function runSimulation(c: Conditions, signal?: AbortSignal): Promise<SimResponse> {
-  if (!API_URL) {
-    const result = simulate(c);
-    return { result, recommendations: recommend(result) };
+function runLocal(c: Conditions, source: ResultSource, fallbackReason?: string): SimResponse {
+  const result = simulate(c);
+  return { result, recommendations: recommend(result), source, fallbackReason,
+    vehicle: { massKg: DEFAULT_VEHICLE.massKg, capacityKwh: DEFAULT_VEHICLE.capacityKwh } };
+}
+
+/**
+ * Backend first when VITE_API_URL is set. Only when the backend is unreachable (network
+ * error, timeout, 502/503/504) does the local engine run, labelled 'local-fallback'.
+ * Validation errors (4xx) and malformed responses are surfaced, never masked by a fallback.
+ * `opts.source` pins a run to one engine (keeps baseline and current comparable).
+ */
+export async function runSimulation(c: Conditions, signal?: AbortSignal, opts: { source?: ResultSource } = {}): Promise<SimResponse> {
+  if (!API_URL || opts.source === 'local') return runLocal(c, 'local');
+  if (opts.source === 'local-fallback') return runLocal(c, 'local-fallback', 'Pinned to the fallback engine to match the current result.');
+  try {
+    return { ...(await fetchApi(c, signal)), source: 'api' };
+  } catch (e) {
+    if (e instanceof Unreachable && opts.source !== 'api') return runLocal(c, 'local-fallback', e.message);
+    if (e instanceof Unreachable) throw new SimError(e.message);
+    throw e;
   }
+}
+
+class Unreachable extends Error {}
+
+async function fetchApi(c: Conditions, signal?: AbortSignal): Promise<Omit<SimResponse, 'source'>> {
   const timeout = AbortSignal.timeout(15000);
   let res: Response;
   try {
@@ -140,8 +165,9 @@ export async function runSimulation(c: Conditions, signal?: AbortSignal): Promis
     });
   } catch (e) {
     if ((e as Error).name === 'AbortError' && signal?.aborted) throw e;
-    throw new SimError(timeout.aborted ? 'The simulation service timed out.' : 'Cannot reach the simulation service.');
+    throw new Unreachable(timeout.aborted ? 'The simulation service timed out.' : 'Cannot reach the simulation service.');
   }
+  if ([502, 503, 504].includes(res.status)) throw new Unreachable(`Simulation service unavailable (${res.status}).`);
   if (!res.ok) {
     const detail = detailText(await res.json().then((j) => j?.detail, () => null));
     throw new SimError(`Simulation service error ${res.status}${detail ? `: ${detail}` : ''}.`);
