@@ -58,6 +58,8 @@ function showEngine(src: ResultSource, v: SimVehicle, reason?: string) {
   chip.textContent = ENGINE_LABEL[src];
   chip.classList.toggle('fallback', src === 'local-fallback');
   chip.title = src === 'local-fallback' && reason ? reason : '';
+  // Backend recommendations are rule-based text; only the in-browser engine re-simulates each tip.
+  $('#recs-unit').textContent = src === 'api' ? 'rule-based tips · no savings estimate' : 'each saving is a re-simulation';
   const note = document.getElementById('vehicle-note');
   if (note) note.textContent = `Vehicle used by ${src === 'api' ? 'the FastAPI backend' : 'the in-browser engine'}: ${fmt(v.massKg)} kg${src === 'api' ? ' (incl. payload)' : ''}, ${fmt(v.capacityKwh, 1)} kWh usable.` +
     (src === 'api' ? ` Not modelled by the backend (no effect on its results): ${API_UNMODELLED_INPUTS.join(', ')}.` : '') +

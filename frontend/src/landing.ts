@@ -1,6 +1,7 @@
 import './styles.css';
 import { createDitherVeil } from './ditherVeil.ts';
 import { DEFAULT_VEHICLE } from './engine.ts';
+import { ENGINE_SOURCE, fetchBackendVehicle } from './api.ts';
 
 const root = document.documentElement;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -21,9 +22,9 @@ nav.querySelectorAll('.nav-links a').forEach((a) => a.addEventListener('click', 
 
 // Theme rail: 01–04, auto-advances with the progress ring; click to select.
 const copy = [
-  'Explore how driving conditions, battery behaviour and real-world variables influence EV energy consumption.',
-  'See how speed, driving style and tyre pressure change every watt-hour you spend per kilometre.',
-  'Model cold mornings, headwinds, gradients and low-grip roads with a deterministic physics engine.',
+  'Explore how driving conditions, battery behaviour and trip variables influence EV energy consumption.',
+  'See how speed, traffic and extra load change every watt-hour you spend per kilometre.',
+  'Compare a baseline with a modified trip (gradient, simulated traffic, payload, accessory load) using a deterministic physics engine.',
   'Turn simulated insight into efficient habits — and arrive with more charge to spare.',
 ];
 const buttons = [...document.querySelectorAll<HTMLButtonElement>('.slide-list button')];
@@ -120,14 +121,53 @@ if (fx && !reduced && matchMedia('(pointer: fine)').matches) {
   }, { passive: true });
 }
 
-// Real model parameters for the HUD callouts and the blueprint section.
-const V = DEFAULT_VEHICLE;
-const vals: Record<string, string> = {
-  cd: V.cd.toFixed(2), area: V.frontalAreaM2.toFixed(1), crr: V.crrBase.toFixed(4), mass: V.massKg.toLocaleString('en-US'),
-  kwh: String(V.capacityKwh), kwhu: `${V.capacityKwh} kWh`, volt: String(V.packVoltage),
-  regen: String(Math.round(V.regenEff * 100)), kw: `${V.maxMotorKw} kW`,
+// Vehicle parameters for the HUD callouts and the blueprint section: always those of the engine
+// the Simulator actually uses (FastAPI backend when configured, else the in-browser engine).
+type Spec = { vals: Record<string, string>; text: Record<string, string>; src: string };
+const pct = (x: number) => String(Math.round(x * 100));
+const localSpec = (src: string): Spec => {
+  const V = DEFAULT_VEHICLE;
+  return {
+    src,
+    vals: {
+      cd: V.cd.toFixed(2), area: V.frontalAreaM2.toFixed(1), crr: V.crrBase.toFixed(4), mass: V.massKg.toLocaleString('en-US'),
+      kwhu: `${V.capacityKwh} kWh`, kw: `${V.maxMotorKw} kW`,
+    },
+    text: {
+      'kw-label': 'Motor',
+      rolling: 'Tyre deformation, scaled by road surface and tyre pressure.',
+      'rolling-val': `C<sub>rr</sub> <b>${V.crrBase.toFixed(4)}</b> on dry asphalt`,
+      battery: 'Drivetrain efficiency, I&sup2;R pack losses and temperature-limited regeneration.',
+      'battery-val': `<b>${V.capacityKwh}</b> kWh &middot; <b>${V.packVoltage}</b> V &middot; regen <b>${pct(V.regenEff)}</b>%`,
+    },
+  };
 };
-document.querySelectorAll<HTMLElement>('[data-v]').forEach((el) => { el.textContent = vals[el.dataset.v!] ?? ''; });
+const backendSpec = (v: Record<string, number>): Spec => ({
+  src: 'Specs shown: the FastAPI backend’s default vehicle, the one the Simulator uses.',
+  vals: {
+    cd: v.drag_coefficient.toFixed(2), area: v.frontal_area_m2.toFixed(1), crr: v.rolling_resistance_coefficient.toFixed(4),
+    mass: v.mass_kg.toLocaleString('en-US'), kwhu: `${v.usable_battery_capacity_kwh} kWh`, kw: `${v.max_regen_power_kw} kW`,
+  },
+  text: {
+    'kw-label': 'Max regen',
+    rolling: 'Tyre rolling loss, a constant coefficient in the backend model.',
+    'rolling-val': `C<sub>rr</sub> <b>${v.rolling_resistance_coefficient.toFixed(4)}</b>`,
+    battery: 'Drivetrain efficiency while driving; regeneration recovers braking energy up to a power limit.',
+    'battery-val': `<b>${v.usable_battery_capacity_kwh}</b> kWh &middot; drive <b>${pct(v.drivetrain_efficiency)}</b>% &middot; regen <b>${pct(v.regen_efficiency)}</b>%`,
+  },
+});
+const applySpec = (s: Spec) => {
+  document.querySelectorAll<HTMLElement>('[data-v]').forEach((el) => { el.textContent = s.vals[el.dataset.v!] ?? ''; });
+  document.querySelectorAll<HTMLElement>('[data-t]').forEach((el) => { el.innerHTML = s.text[el.dataset.t!] ?? el.innerHTML; });
+  document.querySelectorAll<HTMLElement>('.spec-src').forEach((el) => { el.textContent = s.src; });
+};
+if (ENGINE_SOURCE === 'api') {
+  document.querySelectorAll<HTMLElement>('[data-v]').forEach((el) => { el.textContent = '…'; });
+  fetchBackendVehicle().then((v) => applySpec(v ? backendSpec(v)
+    : localSpec('Specs shown: the in-browser reference EV. The backend could not be reached, so the Simulator would run its labelled fallback engine.')));
+} else {
+  applySpec(localSpec('Specs shown: the in-browser reference EV, the engine the Simulator uses (no backend configured).'));
+}
 
 // Blueprint: scroll progress drives the photo → wireframe morph and the active step.
 const bp = document.querySelector<HTMLElement>('.blueprint');

@@ -19,6 +19,20 @@ export const ENGINE_SOURCE: EngineSource = API_URL ? 'api' : 'local';
 
 export class SimError extends Error {}
 
+/** Backend default vehicle (GET /api/v1/config), or null if no backend is configured or it can't be reached. */
+export async function fetchBackendVehicle(): Promise<Record<string, number> | null> {
+  if (!API_URL) return null;
+  try {
+    const res = await fetch(`${API_URL}/api/v1/config`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const v = (await res.json())?.default_vehicle_parameters;
+    const keys = ['drag_coefficient', 'frontal_area_m2', 'rolling_resistance_coefficient', 'mass_kg', 'usable_battery_capacity_kwh', 'drivetrain_efficiency', 'regen_efficiency', 'max_regen_power_kw'];
+    return v && keys.every((k) => Number.isFinite(v[k])) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 /* ---------- Backend contract (subset of backend/app/api/schemas.py) ---------- */
 interface ApiScenario {
   scenario_name?: string;

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KINETIQ — EV Intelligence Simulator</title>
-  <meta name="description" content="Simulate how driving conditions, battery behaviour and real-world variables influence EV energy consumption." />
+  <meta name="description" content="Simulate how driving conditions, battery behaviour and trip variables influence EV energy consumption." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -55,7 +55,7 @@
             <span class="wire"></span>
             <span class="scan"></span>
             <div class="hud" style="--x:40.9%;--y:41.8%;--i:0"><i></i><em><b data-v="cd"></b>Drag coeff.</em></div>
-            <div class="hud" style="--x:48.9%;--y:81.5%;--i:1"><i></i><em><b data-v="kw"></b>Motor</em></div>
+            <div class="hud" style="--x:48.9%;--y:81.5%;--i:1"><i></i><em><b data-v="kw"></b><span data-t="kw-label">Motor</span></em></div>
             <div class="hud" style="--x:64%;--y:78%;--i:2"><i></i><em><b data-v="kwhu"></b>Battery</em></div>
           </div>
           <span class="sweep"></span>
@@ -70,16 +70,17 @@
           <span class="line"><span>EVERY <em>MILE.</em></span></span>
         </h1>
         <p class="tagline" data-reveal="up" style="--d:1">Simulate. Understand. Optimize.</p>
-        <p class="lead" data-reveal="up" style="--d:2" id="slide-copy">Explore how driving conditions, battery behaviour and real-world variables influence EV energy consumption.</p>
+        <p class="lead" data-reveal="up" style="--d:2" id="slide-copy">Explore how driving conditions, battery behaviour and trip variables influence EV energy consumption.</p>
         <div class="cta" data-reveal="up" style="--d:3">
           <a class="btn btn-gold btn-lg" href="/simulator/">Explore the Simulator <span class="arrow">→</span></a>
           <a class="btn btn-ghost btn-lg" href="/simulator/?demo=winter">Watch Demo <span class="play"><svg viewBox="0 0 24 24"><path d="M9 7v10l8-5z"/></svg></span></a>
         </div>
+        <p class="spec-src" data-reveal="up" style="--d:4"></p>
       </div>
 
       <ul class="stats" aria-label="Simulator capabilities">
         <li data-reveal="up" style="--d:4"><span class="stat-ic"><svg viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z"/></svg></span><span><b>10+</b><small>SIMULATION<br/>PARAMETERS</small></span></li>
-        <li data-reveal="up" style="--d:5"><span class="stat-ic"><svg viewBox="0 0 24 24"><path d="M4 20V14M9 20V10M14 20V6M19 20V3M3 20h18"/></svg></span><span><b>REAL-TIME</b><small>ENERGY<br/>ESTIMATION</small></span></li>
+        <li data-reveal="up" style="--d:5"><span class="stat-ic"><svg viewBox="0 0 24 24"><path d="M4 20V14M9 20V10M14 20V6M19 20V3M3 20h18"/></svg></span><span><b>PHYSICS-BASED</b><small>ENERGY<br/>ESTIMATION</small></span></li>
         <li data-reveal="up" style="--d:6"><span class="stat-ic"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v6c0 4.4 3.2 7.8 7.5 9 4.3-1.2 7.5-4.6 7.5-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span><span><b>EXPLAINABLE</b><small>DRIVING<br/>INSIGHTS</small></span></li>
         <li data-reveal="up" style="--d:7"><span class="stat-ic"><svg viewBox="0 0 24 24"><path d="M5 19C5 10 11 5 20 4c-1 9-6 15-15 15z"/><path d="M5 19 13 11"/></svg></span><span><b>MULTIPLE</b><small>ROAD<br/>CONDITIONS</small></span></li>
       </ul>
@@ -92,7 +93,7 @@
         <ol class="slide-list">
           <li><button class="active" data-i="0">SUSTAINABLE <em>MOTION</em></button></li>
           <li><button data-i="1">SMARTER <em>DRIVING</em></button></li>
-          <li><button data-i="2">REAL-WORLD <em>INSIGHTS</em></button></li>
+          <li><button data-i="2">WHAT-IF <em>INSIGHTS</em></button></li>
           <li><button data-i="3">A CLEANER <em>TOMORROW</em></button></li>
         </ol>
       </aside>
@@ -107,10 +108,11 @@
           <h2 class="display-sm" id="bp-title">Physics, not <em>guesswork.</em></h2>
           <ol class="bp-steps">
             <li data-n="01" class="active"><h3>Aerodynamic drag</h3><p>Grows with the square of speed, the dominant load on the highway.</p><code>&frac12;&middot;&rho;&middot;C<sub>d</sub>&middot;A&middot;v&sup2;</code><span class="bp-val">C<sub>d</sub> <b data-v="cd"></b> &middot; A <b data-v="area"></b> m&sup2;</span></li>
-            <li data-n="02"><h3>Rolling resistance</h3><p>Tyre deformation, scaled by road surface and tyre pressure.</p><code>m&middot;g&middot;C<sub>rr</sub>&middot;cos&theta;</code><span class="bp-val">C<sub>rr</sub> <b data-v="crr"></b> on dry asphalt</span></li>
+            <li data-n="02"><h3>Rolling resistance</h3><p data-t="rolling">Tyre deformation, scaled by road surface and tyre pressure.</p><code>m&middot;g&middot;C<sub>rr</sub>&middot;cos&theta;</code><span class="bp-val" data-t="rolling-val">C<sub>rr</sub> <b data-v="crr"></b></span></li>
             <li data-n="03"><h3>Grade &amp; inertia</h3><p>Lifting mass up a gradient and accelerating it, every second of the cycle.</p><code>m&middot;g&middot;sin&theta; + m&middot;a</code><span class="bp-val"><b data-v="mass"></b> kg kerb mass + payload</span></li>
-            <li data-n="04"><h3>Battery &amp; regen</h3><p>Drivetrain efficiency, I&sup2;R pack losses and temperature-limited regeneration.</p><code>P / &eta;<sub>drive</sub> + I&sup2;R</code><span class="bp-val"><b data-v="kwh"></b> kWh &middot; <b data-v="volt"></b> V &middot; regen <b data-v="regen"></b>%</span></li>
+            <li data-n="04"><h3>Battery &amp; regen</h3><p data-t="battery">Drivetrain efficiency and regenerative braking.</p><code>P / &eta;<sub>drive</sub></code><span class="bp-val" data-t="battery-val"></span></li>
           </ol>
+          <p class="spec-src"></p>
           <a class="btn btn-gold btn-sm bp-cta" href="/simulator/">Run the model <span class="arrow">&rarr;</span></a>
         </div>
         <div class="bp-stage" aria-hidden="true">
@@ -133,7 +135,7 @@
         <h2 class="display-sm">Built for every <em>journey.</em></h2>
         <div class="grid3">
           <article><h3>Trip planning</h3><p>Check arrival SOC and reserve margin before a long highway run or a winter commute.</p></article>
-          <article><h3>Driver coaching</h3><p>Quantify how speed, driving style and tyre pressure change energy per kilometre.</p></article>
+          <article><h3>Driver coaching</h3><p>Quantify how speed, traffic, payload and accessory load change energy per kilometre.</p></article>
           <article><h3>Engineering what-ifs</h3><p>Compare a baseline against a modified scenario across energy, range and faults.</p></article>
         </div>
       </div>
