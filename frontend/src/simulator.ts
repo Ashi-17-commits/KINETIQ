@@ -2,7 +2,7 @@ import './styles.css';
 import './simulator.css';
 import './pages.css';
 import { DEFAULT_CONDITIONS, type Conditions, type Result, type Recommendation } from './engine.ts';
-import { runSimulation, ENGINE_SOURCE, SimError, type ResultSource, type SimVehicle } from './api.ts';
+import { runSimulation, ENGINE_SOURCE, SimError, API_UNMODELLED_INPUTS, type ResultSource, type SimVehicle } from './api.ts';
 import { initRoute } from './route.ts';
 
 type Field =
@@ -18,7 +18,7 @@ const TABS: { id: string; label: string; fields: Field[] }[] = [
   { id: 'driving', label: 'Driving', fields: [
     { key: 'cruiseKmh', label: 'Speed (km/h)', kind: 'range', min: 20, max: 160, step: 5, unit: 'km/h' },
     { key: 'distanceKm', label: 'Trip Distance (km)', kind: 'range', min: 5, max: 600, step: 5, unit: 'km' },
-    { key: 'traffic', label: 'Traffic', kind: 'seg', options: [['free', 'Free'], ['moderate', 'Moderate'], ['heavy', 'Heavy']] },
+    { key: 'traffic', label: 'Traffic', kind: 'seg', options: [['steady', 'Steady'], ['free', 'Free Flow'], ['moderate', 'Moderate Congestion'], ['heavy', 'Stop-and-Go']] },
     { key: 'style', label: 'Driving Style', kind: 'seg', options: [['eco', 'Eco'], ['normal', 'Normal'], ['aggressive', 'Sport']] },
   ] },
   { id: 'environment', label: 'Environment', fields: [
@@ -30,6 +30,7 @@ const TABS: { id: string; label: string; fields: Field[] }[] = [
   { id: 'battery', label: 'Battery', fields: [
     { key: 'initialSocPct', label: 'Starting SOC (%)', kind: 'range', min: 5, max: 100, step: 1, unit: '%' },
     { key: 'hvac', label: 'Climate Control', kind: 'toggle' },
+    { key: 'auxExtraKw', label: 'Extra Auxiliary Load (kW)', kind: 'range', min: 0, max: 5, step: 0.1, unit: 'kW' },
   ] },
 ];
 
@@ -58,7 +59,9 @@ function showEngine(src: ResultSource, v: SimVehicle, reason?: string) {
   chip.classList.toggle('fallback', src === 'local-fallback');
   chip.title = src === 'local-fallback' && reason ? reason : '';
   const note = document.getElementById('vehicle-note');
-  if (note) note.textContent = `Vehicle used by ${src === 'api' ? 'the FastAPI backend' : 'the in-browser engine'}: ${fmt(v.massKg)} kg, ${fmt(v.capacityKwh, 1)} kWh usable.`;
+  if (note) note.textContent = `Vehicle used by ${src === 'api' ? 'the FastAPI backend' : 'the in-browser engine'}: ${fmt(v.massKg)} kg${src === 'api' ? ' (incl. payload)' : ''}, ${fmt(v.capacityKwh, 1)} kWh usable.` +
+    (src === 'api' ? ` Not modelled by the backend (no effect on its results): ${API_UNMODELLED_INPUTS.join(', ')}.` : '') +
+    (src === 'local-fallback' ? ' FALLBACK: backend unreachable; these numbers come from the simpler in-browser model and are not backend results.' : '');
 }
 let controller: AbortController | null = null;
 
@@ -239,6 +242,9 @@ function renderKpis() {
   const k = [
     ['Energy required', fmt(r.energyKwh, 1), 'kWh', delta(r.energyKwh, b?.energyKwh, 1, true)],
     ['Est. full range', fmt(r.estRangeKm), 'km', delta(r.estRangeKm, b?.estRangeKm)],
+    ['Remaining range', r.remainingRangeKm == null ? '—' : fmt(r.remainingRangeKm), r.remainingRangeKm == null ? '' : 'km',
+      r.remainingRangeKm == null ? `<span class="dl" title="${esc(r.remainingRangeNote ?? '')}">n/a</span>` : delta(r.remainingRangeKm, b?.remainingRangeKm ?? undefined)],
+    ['Regen recovered', fmt(r.breakdownKwh.regen, 2), 'kWh', delta(r.breakdownKwh.regen, b?.breakdownKwh.regen, 2)],
     ['Trip time', fmt(r.durationMin), 'min', delta(r.durationMin, b?.durationMin, 0, true)],
     ['Peak pack power', fmt(r.peakKw), 'kW', `<span class="dl">${fmt(r.peakCRate, 2)} C</span>`],
   ];
@@ -312,18 +318,44 @@ function renderCompare() {
   if (!b || !r) { $('#compare').innerHTML = '<tbody><tr><td>Run a successful simulation to compare scenarios.</td></tr></tbody>'; return; }
   const rows: [string, string, string, string][] = [
     ['Distance', `${fmt(b.inputs.distanceKm)} km`, `${fmt(r.inputs.distanceKm)} km`, delta(r.inputs.distanceKm, b.inputs.distanceKm)],
+    ['Distance simulated', `${fmt(b.trace.at(-1)!.km, 1)} km`, `${fmt(r.trace.at(-1)!.km, 1)} km`, delta(r.trace.at(-1)!.km, b.trace.at(-1)!.km, 1)],
+    ['Avg speed', `${fmt(b.avgKmh)} km/h`, `${fmt(r.avgKmh)} km/h`, delta(r.avgKmh, b.avgKmh)],
     ['Cruise speed', `${b.inputs.cruiseKmh} km/h`, `${r.inputs.cruiseKmh} km/h`, delta(r.inputs.cruiseKmh, b.inputs.cruiseKmh)],
     ['Temperature', `${b.inputs.ambientC} °C`, `${r.inputs.ambientC} °C`, delta(r.inputs.ambientC, b.inputs.ambientC)],
     ['Energy required', `${fmt(b.energyKwh, 1)} kWh`, `${fmt(r.energyKwh, 1)} kWh`, delta(r.energyKwh, b.energyKwh, 1, true)],
     ['Consumption', `${fmt(b.whPerKm)} Wh/km`, `${fmt(r.whPerKm)} Wh/km`, delta(r.whPerKm, b.whPerKm, 0, true)],
     ['Arrival SOC', `${fmt(b.endSocPct, 1)} %`, `${fmt(r.endSocPct, 1)} %`, delta(r.endSocPct, b.endSocPct, 1)],
     ['Est. full range', `${fmt(b.estRangeKm)} km`, `${fmt(r.estRangeKm)} km`, delta(r.estRangeKm, b.estRangeKm)],
+    ['Remaining range', rng(b), rng(r), r.remainingRangeKm != null && b.remainingRangeKm != null ? delta(r.remainingRangeKm, b.remainingRangeKm) : '<span class="dl">—</span>'],
+    ['Depleted en route', b.depletedAtKm !== null ? `yes, ~${fmt(b.depletedAtKm)} km` : 'no', r.depletedAtKm !== null ? `yes, ~${fmt(r.depletedAtKm)} km` : 'no', ''],
     ['Usable capacity', `${fmt(b.usableKwh, 1)} kWh`, `${fmt(r.usableKwh, 1)} kWh`, delta(r.usableKwh, b.usableKwh, 1)],
     ['Regen recovered', `${fmt(b.breakdownKwh.regen, 2)} kWh`, `${fmt(r.breakdownKwh.regen, 2)} kWh`, delta(r.breakdownKwh.regen, b.breakdownKwh.regen, 2)],
     ['Alerts', `${b.faults.length}`, `${r.faults.length}`, delta(r.faults.length, b.faults.length, 0, true)],
   ];
-  $('#compare').innerHTML = `<thead><tr><th>Metric</th><th>Baseline</th><th>Current</th><th>Δ</th></tr></thead><tbody>${rows.map((c) => `<tr><td>${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td><td>${c[3]}</td></tr>`).join('')}</tbody>`;
+  const changed = WHATIF_INPUTS.filter(([k]) => b.inputs[k] !== r.inputs[k]);
+  const explain = changed.length
+    ? changed.map(([k, label, unit]) => {
+        const off = resultSource === 'api' && API_UNMODELLED_KEYS.includes(k);
+        return `${label}: ${esc(String(b.inputs[k]))}${unit} → ${esc(String(r.inputs[k]))}${unit}${off ? ' <em>(not modelled by the backend; no effect on these results)</em>' : ''}`;
+      }).join('<br>')
+    : 'No inputs differ from the baseline.';
+  const dE = r.energyKwh - b.energyKwh, dSoc = r.endSocPct - b.endSocPct;
+  const engineName = resultSource === 'api' ? 'FastAPI backend' : resultSource === 'local-fallback' ? 'in-browser FALLBACK (backend unreachable)' : 'in-browser';
+  const caption = `<caption class="explain" style="caption-side:bottom;text-align:left">
+    <b>Engine:</b> ${engineName} for both runs.
+    <b>Traffic</b> baseline: ${esc(b.trafficLabel ?? '—')}; current: ${esc(r.trafficLabel ?? '—')}.<br>
+    <b>Changed inputs:</b><br>${explain}<br>
+    <b>Result:</b> energy ${dE >= 0 ? '+' : ''}${fmt(dE, 2)} kWh, arrival SOC ${dSoc >= 0 ? '+' : ''}${fmt(dSoc, 1)} pts vs baseline (difference of the two engine runs).${resultSource === 'api' ? '<br>Backend traffic runs cover a fixed duration (distance ÷ cruise speed), so congested runs travel fewer km: compare <b>Consumption</b> per km, not total energy.' : ''}</caption>`;
+  $('#compare').innerHTML = caption + `<thead><tr><th>Metric</th><th>Baseline</th><th>Current</th><th>Δ</th></tr></thead><tbody>${rows.map((c) => `<tr><td>${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td><td>${c[3]}</td></tr>`).join('')}</tbody>`;
 }
+
+const rng = (x: Result) => (x.remainingRangeKm == null ? 'n/a' : `${fmt(x.remainingRangeKm)} km`);
+const WHATIF_INPUTS: [keyof Conditions, string, string][] = [
+  ['traffic', 'Traffic', ''], ['style', 'Driving style', ''], ['payloadKg', 'Payload', ' kg'], ['auxExtraKw', 'Extra aux load', ' kW'],
+  ['initialSocPct', 'Starting SOC', ' %'], ['cruiseKmh', 'Speed', ' km/h'], ['distanceKm', 'Distance', ' km'], ['gradePct', 'Gradient', ' %'],
+  ['ambientC', 'Ambient', ' °C'], ['hvac', 'Climate control', ''], ['headwindKmh', 'Headwind', ' km/h'], ['surface', 'Surface', ''], ['tirePressureBar', 'Tyre pressure', ' bar'],
+];
+const API_UNMODELLED_KEYS: (keyof Conditions)[] = ['style', 'tirePressureBar', 'headwindKmh', 'hvac', 'surface'];
 
 function render() {
   renderGauges();

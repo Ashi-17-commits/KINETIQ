@@ -10,7 +10,7 @@
 
 export type Surface = 'dry' | 'wet' | 'gravel' | 'snow';
 export type Style = 'eco' | 'normal' | 'aggressive';
-export type Traffic = 'free' | 'moderate' | 'heavy';
+export type Traffic = 'steady' | 'free' | 'moderate' | 'heavy';
 
 export interface Vehicle {
   massKg: number;
@@ -40,6 +40,7 @@ export interface Conditions {
   traffic: Traffic;
   tirePressureBar: number;
   initialSocPct: number;
+  auxExtraKw: number;    // extra constant electrical load (kW) on top of the engine's base load
 }
 
 export const DEFAULT_VEHICLE: Vehicle = {
@@ -70,13 +71,14 @@ export const DEFAULT_CONDITIONS: Conditions = {
   traffic: 'moderate',
   tirePressureBar: 2.5,
   initialSocPct: 80,
+  auxExtraKw: 0,
 };
 
 const G = 9.81;
 const SURFACE_CRR: Record<Surface, number> = { dry: 1, wet: 1.15, gravel: 1.6, snow: 2.2 };
 const STYLE_ACCEL: Record<Style, number> = { eco: 0.9, normal: 1.6, aggressive: 2.8 }; // m/s²
 const STYLE_DECEL: Record<Style, number> = { eco: 0.8, normal: 1.6, aggressive: 3.2 }; // m/s²
-const TRAFFIC_STOPS_PER_KM: Record<Traffic, number> = { free: 0.1, moderate: 0.6, heavy: 2 };
+const TRAFFIC_STOPS_PER_KM: Record<Traffic, number> = { steady: 0, free: 0.1, moderate: 0.6, heavy: 2 };
 const STOP_DWELL_S = 15;
 const NOMINAL_TIRE_BAR = 2.5;
 
@@ -103,6 +105,11 @@ export interface Result {
   breakdownKwh: Breakdown;
   trace: TracePoint[];
   faults: Fault[];
+  /** Range left after arrival at this trip's consumption; null when undefined (e.g. net regen). */
+  remainingRangeKm?: number | null;
+  remainingRangeNote?: string;
+  /** Engine-reported traffic description (always simulated, never live data). */
+  trafficLabel?: string;
 }
 
 /** Air density from ideal gas law at sea-level pressure. */
@@ -169,7 +176,7 @@ export function simulate(c: Conditions, veh: Vehicle = DEFAULT_VEHICLE): Result 
   const theta = Math.atan(c.gradePct / 100);
   const wind = c.headwindKmh / 3.6;
   const usableKwh = veh.capacityKwh * capacityFactor(c.ambientC);
-  const aux = veh.auxBaseKw + hvacKw(c);
+  const aux = veh.auxBaseKw + hvacKw(c) + Math.max(0, c.auxExtraKw ?? 0);
   const speeds = buildCycle(c);
 
   const bd: Breakdown = { aero: 0, rolling: 0, grade: 0, inertia: 0, aux: 0, packLoss: 0, driveLoss: 0, regen: 0 };
