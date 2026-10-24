@@ -236,14 +236,35 @@ function renderHotspots() {
   set('wheels', r ? `${fmt(r.breakdownKwh.regen, 2)} kWh` : '—');
 }
 
+const simKm = (x: Result) => x.trace.at(-1)!.km;
+const sameDistance = (a: Result, b: Result) => Math.abs(simKm(a) - simKm(b)) <= 0.01 * Math.max(simKm(a), simKm(b), 0.1);
+/** Total-energy delta is only judged better/worse when both runs covered the same distance. */
+function energyDelta(r: Result, b: Result | undefined) {
+  if (!b || sameDistance(r, b)) return delta(r.energyKwh, b?.energyKwh, 1, true);
+  const d = r.energyKwh - b.energyKwh;
+  return `<span class="dl" title="Runs covered different distances; compare consumption per km.">${d > 0 ? '+' : ''}${fmt(d, 1)} (different km)</span>`;
+}
+/** Trip-dependent metrics (arrival SOC, remaining range) are only judged better/worse at equal distance. */
+function distDelta(r: Result, b: Result, cur: number, base: number, d = 0) {
+  if (sameDistance(r, b)) return delta(cur, base, d);
+  const diff = cur - base;
+  return `<span class="dl" title="Runs covered different distances.">${diff > 0 ? '+' : ''}${fmt(diff, d)} (different km)</span>`;
+}
+const TRAFFIC_UI: Record<string, string> = { steady: 'Steady', free: 'Free Flow', moderate: 'Moderate Congestion', heavy: 'Stop-and-Go' };
+const STYLE_UI: Record<string, string> = { eco: 'Eco', normal: 'Normal', aggressive: 'Sport' };
+const showInput = (k: keyof Conditions, v: unknown) => (k === 'traffic' ? TRAFFIC_UI[String(v)] : k === 'style' ? STYLE_UI[String(v)] : undefined) ?? String(v);
+
 function renderKpis() {
   const r = result, b = baseline ?? undefined;
   if (!r) { $('#kpis').innerHTML = ''; return; }
   const k = [
-    ['Energy required', fmt(r.energyKwh, 1), 'kWh', delta(r.energyKwh, b?.energyKwh, 1, true)],
-    ['Est. full range', fmt(r.estRangeKm), 'km', delta(r.estRangeKm, b?.estRangeKm)],
+    [`Total energy${r.depletedAtKm !== null ? ' requested (battery depletes)' : ''} · ${fmt(simKm(r), 1)} km`, fmt(r.energyKwh, 1), 'kWh', energyDelta(r, b)],
+    ['Consumption per km', fmt(r.whPerKm), 'Wh/km', delta(r.whPerKm, b?.whPerKm, 0, true)],
+    ['Est. full range', r.whPerKm > 0 ? fmt(r.estRangeKm) : 'n/a', r.whPerKm > 0 ? 'km' : '',
+      r.whPerKm > 0 && (!b || b.whPerKm > 0) ? delta(r.estRangeKm, b?.estRangeKm) : '<span class="dl" title="Undefined when net consumption is not positive.">—</span>'],
     ['Remaining range', r.remainingRangeKm == null ? '—' : fmt(r.remainingRangeKm), r.remainingRangeKm == null ? '' : 'km',
-      r.remainingRangeKm == null ? `<span class="dl" title="${esc(r.remainingRangeNote ?? '')}">n/a</span>` : delta(r.remainingRangeKm, b?.remainingRangeKm ?? undefined)],
+      r.remainingRangeKm == null ? `<span class="dl" title="${esc(r.remainingRangeNote ?? '')}">n/a</span>`
+        : b && b.remainingRangeKm != null ? distDelta(r, b, r.remainingRangeKm, b.remainingRangeKm) : delta(r.remainingRangeKm, undefined)],
     ['Regen recovered', fmt(r.breakdownKwh.regen, 2), 'kWh', delta(r.breakdownKwh.regen, b?.breakdownKwh.regen, 2)],
     ['Trip time', fmt(r.durationMin), 'min', delta(r.durationMin, b?.durationMin, 0, true)],
     ['Peak pack power', fmt(r.peakKw), 'kW', `<span class="dl">${fmt(r.peakCRate, 2)} C</span>`],
@@ -286,7 +307,8 @@ function renderBreakdown() {
   const b = result.breakdownKwh;
   const rows: [string, number, string][] = [
     ['Aerodynamic drag', b.aero, ''], ['Rolling resistance', b.rolling, ''], ['Climbing', b.grade, ''],
-    ['Acceleration', b.inertia, ''], ['Drivetrain losses', b.driveLoss, ''], ['Climate & auxiliaries', b.aux, ''],
+    [result.inertiaEstimated ? 'Acceleration (est., remainder)' : 'Acceleration', b.inertia, ''],
+    [result.driveLossRemainder ? 'Drivetrain & other losses (remainder)' : 'Drivetrain losses', b.driveLoss, ''], ['Climate & auxiliaries', b.aux, ''],
     ['Pack I²R losses', b.packLoss, ''], ['Regen recovered', -b.regen, 'regen'],
   ];
   const max = Math.max(...rows.map((r) => Math.abs(r[1])), 0.001);
@@ -294,7 +316,9 @@ function renderBreakdown() {
   $('#breakdown').innerHTML = rows.filter((r) => Math.abs(r[1]) >= 0.005).map(([l, v, c]) => `
     <div class="bd-row ${c} ${l === top[0] ? 'top' : ''}"><span class="bd-l">${l}</span>
       <span class="bd-bar"><i style="width:${(Math.abs(v) / max) * 100}%"></i></span><span class="bd-v">${v < 0 ? '−' : ''}${fmt(Math.abs(v), 2)}</span></div>`).join('') +
-    `<p class="explain">Largest load: <b>${top[0].toLowerCase()}</b> at ${fmt((top[1] / Math.max(result.energyKwh + b.regen, 0.001)) * 100)}% of gross demand.</p>`;
+    `<p class="explain">Largest load: <b>${top[0].toLowerCase()}</b> at ${fmt((top[1] / Math.max(result.energyKwh + b.regen, 0.001)) * 100)}% of gross demand.</p>` +
+    (result.inertiaEstimated && b.inertia >= 0.005 ? '<p class="explain">Acceleration is not reported by the backend: it is estimated as wheel-side traction energy minus drag, rolling and climbing work, so it also absorbs any rounding or attribution error.</p>' : '') +
+    (result.driveLossRemainder ? '<p class="explain">Drivetrain &amp; other losses is the remainder of total energy not attributed to the other rows.</p>' : '');
 }
 
 function renderFaults() {
@@ -317,16 +341,16 @@ function renderCompare() {
   const b = baseline, r = result;
   if (!b || !r) { $('#compare').innerHTML = '<tbody><tr><td>Run a successful simulation to compare scenarios.</td></tr></tbody>'; return; }
   const rows: [string, string, string, string][] = [
-    ['Distance', `${fmt(b.inputs.distanceKm)} km`, `${fmt(r.inputs.distanceKm)} km`, delta(r.inputs.distanceKm, b.inputs.distanceKm)],
-    ['Distance simulated', `${fmt(b.trace.at(-1)!.km, 1)} km`, `${fmt(r.trace.at(-1)!.km, 1)} km`, delta(r.trace.at(-1)!.km, b.trace.at(-1)!.km, 1)],
+    ['Distance requested', `${fmt(b.inputs.distanceKm)} km`, `${fmt(r.inputs.distanceKm)} km`, delta(r.inputs.distanceKm, b.inputs.distanceKm)],
+    ['Distance simulated', `${fmt(simKm(b), 1)} km`, `${fmt(simKm(r), 1)} km`, delta(simKm(r), simKm(b), 1)],
     ['Avg speed', `${fmt(b.avgKmh)} km/h`, `${fmt(r.avgKmh)} km/h`, delta(r.avgKmh, b.avgKmh)],
     ['Cruise speed', `${b.inputs.cruiseKmh} km/h`, `${r.inputs.cruiseKmh} km/h`, delta(r.inputs.cruiseKmh, b.inputs.cruiseKmh)],
     ['Temperature', `${b.inputs.ambientC} °C`, `${r.inputs.ambientC} °C`, delta(r.inputs.ambientC, b.inputs.ambientC)],
-    ['Energy required', `${fmt(b.energyKwh, 1)} kWh`, `${fmt(r.energyKwh, 1)} kWh`, delta(r.energyKwh, b.energyKwh, 1, true)],
-    ['Consumption', `${fmt(b.whPerKm)} Wh/km`, `${fmt(r.whPerKm)} Wh/km`, delta(r.whPerKm, b.whPerKm, 0, true)],
-    ['Arrival SOC', `${fmt(b.endSocPct, 1)} %`, `${fmt(r.endSocPct, 1)} %`, delta(r.endSocPct, b.endSocPct, 1)],
-    ['Est. full range', `${fmt(b.estRangeKm)} km`, `${fmt(r.estRangeKm)} km`, delta(r.estRangeKm, b.estRangeKm)],
-    ['Remaining range', rng(b), rng(r), r.remainingRangeKm != null && b.remainingRangeKm != null ? delta(r.remainingRangeKm, b.remainingRangeKm) : '<span class="dl">—</span>'],
+    ['Total energy (over distance simulated)', `${fmt(b.energyKwh, 1)} kWh`, `${fmt(r.energyKwh, 1)} kWh`, energyDelta(r, b)],
+    ['Consumption per km', `${fmt(b.whPerKm)} Wh/km`, `${fmt(r.whPerKm)} Wh/km`, delta(r.whPerKm, b.whPerKm, 0, true)],
+    ['Arrival SOC', `${fmt(b.endSocPct, 1)} %`, `${fmt(r.endSocPct, 1)} %`, distDelta(r, b, r.endSocPct, b.endSocPct, 1)],
+    ['Est. full range', fullRng(b), fullRng(r), b.whPerKm > 0 && r.whPerKm > 0 ? delta(r.estRangeKm, b.estRangeKm) : '<span class="dl">—</span>'],
+    ['Remaining range', rng(b), rng(r), r.remainingRangeKm != null && b.remainingRangeKm != null ? distDelta(r, b, r.remainingRangeKm, b.remainingRangeKm) : '<span class="dl">—</span>'],
     ['Depleted en route', b.depletedAtKm !== null ? `yes, ~${fmt(b.depletedAtKm)} km` : 'no', r.depletedAtKm !== null ? `yes, ~${fmt(r.depletedAtKm)} km` : 'no', ''],
     ['Usable capacity', `${fmt(b.usableKwh, 1)} kWh`, `${fmt(r.usableKwh, 1)} kWh`, delta(r.usableKwh, b.usableKwh, 1)],
     ['Regen recovered', `${fmt(b.breakdownKwh.regen, 2)} kWh`, `${fmt(r.breakdownKwh.regen, 2)} kWh`, delta(r.breakdownKwh.regen, b.breakdownKwh.regen, 2)],
@@ -336,19 +360,20 @@ function renderCompare() {
   const explain = changed.length
     ? changed.map(([k, label, unit]) => {
         const off = resultSource === 'api' && API_UNMODELLED_KEYS.includes(k);
-        return `${label}: ${esc(String(b.inputs[k]))}${unit} → ${esc(String(r.inputs[k]))}${unit}${off ? ' <em>(not modelled by the backend; no effect on these results)</em>' : ''}`;
+        return `${label}: ${esc(showInput(k, b.inputs[k]))}${unit} → ${esc(showInput(k, r.inputs[k]))}${unit}${off ? ' <em>(not modelled by the backend; no effect on these results)</em>' : ''}`;
       }).join('<br>')
     : 'No inputs differ from the baseline.';
-  const dE = r.energyKwh - b.energyKwh, dSoc = r.endSocPct - b.endSocPct;
+  const dE = r.energyKwh - b.energyKwh, dSoc = r.endSocPct - b.endSocPct, dWh = r.whPerKm - b.whPerKm;
   const engineName = resultSource === 'api' ? 'FastAPI backend' : resultSource === 'local-fallback' ? 'in-browser FALLBACK (backend unreachable)' : 'in-browser';
   const caption = `<caption class="explain" style="caption-side:bottom;text-align:left">
     <b>Engine:</b> ${engineName} for both runs.
     <b>Traffic</b> baseline: ${esc(b.trafficLabel ?? '—')}; current: ${esc(r.trafficLabel ?? '—')}.<br>
     <b>Changed inputs:</b><br>${explain}<br>
-    <b>Result:</b> energy ${dE >= 0 ? '+' : ''}${fmt(dE, 2)} kWh, arrival SOC ${dSoc >= 0 ? '+' : ''}${fmt(dSoc, 1)} pts vs baseline (difference of the two engine runs).${resultSource === 'api' ? '<br>Backend traffic runs cover a fixed duration (distance ÷ cruise speed), so congested runs travel fewer km: compare <b>Consumption</b> per km, not total energy.' : ''}</caption>`;
+    <b>Result</b> (difference of the two engine runs): consumption ${dWh >= 0 ? '+' : ''}${fmt(dWh)} Wh/km, total energy ${dE >= 0 ? '+' : ''}${fmt(dE, 2)} kWh, arrival SOC ${dSoc >= 0 ? '+' : ''}${fmt(dSoc, 1)} pts.${r.depletedAtKm !== null || b.depletedAtKm !== null ? '<br><b>Battery depletes</b> in at least one run: its total energy is what the full trip would require, not what the battery delivered.' : ''}${sameDistance(r, b) ? '' : `<br><b>Distances differ</b> (${fmt(simKm(b), 1)} km vs ${fmt(simKm(r), 1)} km simulated): total energy and arrival SOC are not like-for-like; compare consumption per km.`}${resultSource === 'api' ? '<br>Backend traffic runs cover a fixed duration (requested distance ÷ cruise speed), so slower traffic covers fewer km.' : ''}</caption>`;
   $('#compare').innerHTML = caption + `<thead><tr><th>Metric</th><th>Baseline</th><th>Current</th><th>Δ</th></tr></thead><tbody>${rows.map((c) => `<tr><td>${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td><td>${c[3]}</td></tr>`).join('')}</tbody>`;
 }
 
+const fullRng = (x: Result) => (x.whPerKm > 0 ? `${fmt(x.estRangeKm)} km` : 'n/a (net regen)');
 const rng = (x: Result) => (x.remainingRangeKm == null ? 'n/a' : `${fmt(x.remainingRangeKm)} km`);
 const WHATIF_INPUTS: [keyof Conditions, string, string][] = [
   ['traffic', 'Traffic', ''], ['style', 'Driving style', ''], ['payloadKg', 'Payload', ' kg'], ['auxExtraKw', 'Extra aux load', ' kW'],

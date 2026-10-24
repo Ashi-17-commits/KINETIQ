@@ -110,6 +110,10 @@ export interface Result {
   remainingRangeNote?: string;
   /** Engine-reported traffic description (always simulated, never live data). */
   trafficLabel?: string;
+  /** True when breakdownKwh.inertia is a remainder estimate, not a directly computed value. */
+  inertiaEstimated?: boolean;
+  /** True when breakdownKwh.driveLoss is a remainder (everything not attributed elsewhere). */
+  driveLossRemainder?: boolean;
 }
 
 /** Air density from ideal gas law at sea-level pressure. */

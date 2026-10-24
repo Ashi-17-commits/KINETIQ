@@ -151,6 +151,8 @@ export function fromApiSimulation(s: ApiSimulation, c: Conditions): Omit<SimResp
     remainingRangeKm: b.estimated_remaining_range_km ?? null,
     remainingRangeNote: b.remaining_range_note ?? (b.estimated_remaining_range_km === undefined ? 'Backend did not report remaining range.' : undefined),
     trafficLabel,
+    inertiaEstimated: p.traction_energy_kwh !== undefined,
+    driveLossRemainder: p.traction_energy_kwh === undefined,
     faults: s.events.map((e) => ({
       id: e.event_id, severity: SEVERITY[e.severity] ?? 'info',
       title: e.event_type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (m) => m.toUpperCase()),
