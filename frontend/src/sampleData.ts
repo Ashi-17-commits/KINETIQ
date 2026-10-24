@@ -49,8 +49,10 @@ export const RECOMMENDATIONS = [
   { icon: 'clock', title: 'Travel Off-Peak', text: 'Fewer stop–start cycles mean less braking loss.' },
 ];
 
+/** Illustrative route geometry only. Distance, gain, time and energy are derived from it
+ *  (src/routeData.ts) and the active energy engine; none are stored here. */
 export const ROUTE_SAMPLE = {
-  start: 'Mumbai, MH', end: 'Pune, MH', distanceKm: 150, travelMin: 165, elevationGainM: 720, energyKwh: 24.5,
+  start: 'Mumbai, MH', end: 'Pune, MH',
   elevation: [[0, 20], [12, 40], [25, 120], [38, 260], [50, 420], [62, 560], [72, 700], [80, 640], [92, 600], [104, 560], [116, 600], [126, 560], [138, 560], [150, 560]] as [number, number][],
   stations: [{ x: 38, y: 52, name: 'Sample station 1' }, { x: 66, y: 60, name: 'Sample station 2' }, { x: 84, y: 66, name: 'Sample station 3' }],
 };

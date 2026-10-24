@@ -87,6 +87,9 @@
 output.num { display: block; }
 .manual { border-top: 1px solid var(--line) !important; padding-top: 14px !important; }
 .manual[hidden] { display: none; }
+#route-form fieldset:disabled .seg-row span, #route-form .toggle input:disabled ~ i, #route-form select:disabled { opacity: 0.45; cursor: not-allowed; }
+#route-form fieldset:disabled .seg-row label, #route-form .toggle:has(input:disabled) { cursor: not-allowed; }
+#route-form .seg .hint, #r-vehicle-note { margin: 8px 0 0; }
 .hint { margin: 0 0 12px; font-size: 12px; line-height: 1.55; color: var(--dim); }
 .manual-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .manual-row label { display: grid; gap: 6px; font-size: 12px; color: #d8d5cd; }
