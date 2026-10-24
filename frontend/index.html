@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KINETIQ — EV Intelligence Simulator</title>
+  <meta name="description" content="Simulate how driving conditions, battery behaviour and real-world variables influence EV energy consumption." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="preload" as="image" href="/img/hero-vehicle.jpg" />
+  <script>document.documentElement.classList.add("js")</script>
+</head>
+<body class="landing">
+  <header class="nav" data-reveal="nav">
+    <a class="brand" href="/" aria-label="KINETIQ home">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+      <span class="brand-text"><b>KINETIQ</b><small>EV INTELLIGENCE SIMULATOR</small></span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="/" class="active" aria-current="page">Home</a>
+      <a href="#technology">Technology</a>
+      <a href="/simulator/">Simulator</a>
+      <a href="#use-cases">Use Cases</a>
+      <a href="#about">About</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="icon-btn" href="/simulator/" aria-label="Search scenarios">
+        <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7"/><path d="m16 16 5 5"/></svg>
+      </a>
+      <a class="icon-btn" href="#about" aria-label="Account">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4.2"/><path d="M4 21c1.2-4.2 4.3-6.2 8-6.2s6.8 2 8 6.2"/></svg>
+      </a>
+      <a class="btn btn-gold btn-sm" href="/simulator/">Launch Simulator <span class="arrow">→</span></a>
+      <button class="menu-btn" aria-label="Open menu" aria-expanded="false"><span></span><span></span></button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-media" aria-hidden="true">
+        <div class="hero-frame">
+          <img src="/img/hero-vehicle.jpg" alt="" class="hero-img" />
+          <div class="car-veil"></div>
+          <div class="car-fx">
+            <span class="road-pool"></span>
+            <span class="road-refl road-refl-r"></span>
+            <span class="road-refl road-refl-l"></span>
+            <span class="body-sheen"></span>
+            <span class="body-sheen hover-sheen"></span>
+            <span class="hl-bloom hl-bloom-r"></span>
+            <span class="hl-bloom hl-bloom-l"></span>
+            <span class="hl hl-r"></span>
+            <span class="hl hl-l"></span>
+            <span class="wire"></span>
+            <span class="scan"></span>
+            <div class="hud" style="--x:40.9%;--y:41.8%;--i:0"><i></i><em><b data-v="cd"></b>Drag coeff.</em></div>
+            <div class="hud" style="--x:48.9%;--y:81.5%;--i:1"><i></i><em><b data-v="kw"></b>Motor</em></div>
+            <div class="hud" style="--x:64%;--y:78%;--i:2"><i></i><em><b data-v="kwhu"></b>Battery</em></div>
+          </div>
+          <span class="sweep"></span>
+        </div>
+        <div class="hero-shade"></div>
+      </div>
+
+      <div class="hero-content">
+        <p class="eyebrow" data-reveal="eyebrow">EV INTELLIGENCE SIMULATOR</p>
+        <h1 id="hero-title" class="display">
+          <span class="line"><span>ENGINEERING</span></span>
+          <span class="line"><span>EVERY <em>MILE.</em></span></span>
+        </h1>
+        <p class="tagline" data-reveal="up" style="--d:1">Simulate. Understand. Optimize.</p>
+        <p class="lead" data-reveal="up" style="--d:2" id="slide-copy">Explore how driving conditions, battery behaviour and real-world variables influence EV energy consumption.</p>
+        <div class="cta" data-reveal="up" style="--d:3">
+          <a class="btn btn-gold btn-lg" href="/simulator/">Explore the Simulator <span class="arrow">→</span></a>
+          <a class="btn btn-ghost btn-lg" href="/simulator/?demo=winter">Watch Demo <span class="play"><svg viewBox="0 0 24 24"><path d="M9 7v10l8-5z"/></svg></span></a>
+        </div>
+      </div>
+
+      <ul class="stats" aria-label="Simulator capabilities">
+        <li data-reveal="up" style="--d:4"><span class="stat-ic"><svg viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z"/></svg></span><span><b>10+</b><small>SIMULATION<br/>PARAMETERS</small></span></li>
+        <li data-reveal="up" style="--d:5"><span class="stat-ic"><svg viewBox="0 0 24 24"><path d="M4 20V14M9 20V10M14 20V6M19 20V3M3 20h18"/></svg></span><span><b>REAL-TIME</b><small>ENERGY<br/>ESTIMATION</small></span></li>
+        <li data-reveal="up" style="--d:6"><span class="stat-ic"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v6c0 4.4 3.2 7.8 7.5 9 4.3-1.2 7.5-4.6 7.5-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span><span><b>EXPLAINABLE</b><small>DRIVING<br/>INSIGHTS</small></span></li>
+        <li data-reveal="up" style="--d:7"><span class="stat-ic"><svg viewBox="0 0 24 24"><path d="M5 19C5 10 11 5 20 4c-1 9-6 15-15 15z"/><path d="M5 19 13 11"/></svg></span><span><b>MULTIPLE</b><small>ROAD<br/>CONDITIONS</small></span></li>
+      </ul>
+
+      <aside class="slides" aria-label="Themes">
+        <div class="counter" data-reveal="fade" style="--d:4">
+          <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="48" class="ring-bg"/><circle cx="50" cy="50" r="48" class="ring"/></svg>
+          <span class="num" id="slide-num">01</span><span class="total">/ 04</span>
+        </div>
+        <ol class="slide-list">
+          <li><button class="active" data-i="0">SUSTAINABLE <em>MOTION</em></button></li>
+          <li><button data-i="1">SMARTER <em>DRIVING</em></button></li>
+          <li><button data-i="2">REAL-WORLD <em>INSIGHTS</em></button></li>
+          <li><button data-i="3">A CLEANER <em>TOMORROW</em></button></li>
+        </ol>
+      </aside>
+
+      <div class="baseline" aria-hidden="true"><span class="seg"></span><span class="rule"></span><span class="motto">BUILT FOR A SMARTER TOMORROW</span><span class="tick"></span></div>
+    </section>
+
+    <section id="technology" class="blueprint" aria-labelledby="bp-title">
+      <div class="bp-sticky">
+        <div class="bp-copy">
+          <p class="eyebrow">TECHNOLOGY</p>
+          <h2 class="display-sm" id="bp-title">Physics, not <em>guesswork.</em></h2>
+          <ol class="bp-steps">
+            <li data-n="01" class="active"><h3>Aerodynamic drag</h3><p>Grows with the square of speed, the dominant load on the highway.</p><code>&frac12;&middot;&rho;&middot;C<sub>d</sub>&middot;A&middot;v&sup2;</code><span class="bp-val">C<sub>d</sub> <b data-v="cd"></b> &middot; A <b data-v="area"></b> m&sup2;</span></li>
+            <li data-n="02"><h3>Rolling resistance</h3><p>Tyre deformation, scaled by road surface and tyre pressure.</p><code>m&middot;g&middot;C<sub>rr</sub>&middot;cos&theta;</code><span class="bp-val">C<sub>rr</sub> <b data-v="crr"></b> on dry asphalt</span></li>
+            <li data-n="03"><h3>Grade &amp; inertia</h3><p>Lifting mass up a gradient and accelerating it, every second of the cycle.</p><code>m&middot;g&middot;sin&theta; + m&middot;a</code><span class="bp-val"><b data-v="mass"></b> kg kerb mass + payload</span></li>
+            <li data-n="04"><h3>Battery &amp; regen</h3><p>Drivetrain efficiency, I&sup2;R pack losses and temperature-limited regeneration.</p><code>P / &eta;<sub>drive</sub> + I&sup2;R</code><span class="bp-val"><b data-v="kwh"></b> kWh &middot; <b data-v="volt"></b> V &middot; regen <b data-v="regen"></b>%</span></li>
+          </ol>
+          <a class="btn btn-gold btn-sm bp-cta" href="/simulator/">Run the model <span class="arrow">&rarr;</span></a>
+        </div>
+        <div class="bp-stage" aria-hidden="true">
+          <div class="bp-car">
+            <img src="/img/hero-vehicle.jpg" alt="" class="bp-photo" loading="lazy" />
+            <span class="bp-wire"></span>
+            <span class="bp-pt" style="--x:40.9%;--y:41.8%"></span>
+            <span class="bp-pt" style="--x:48.9%;--y:81.5%"></span>
+            <span class="bp-pt" style="--x:58%;--y:62%"></span>
+            <span class="bp-pt" style="--x:64%;--y:78%"></span>
+          </div>
+          <div class="bp-progress"><i></i></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="use-cases" class="band band-alt">
+      <div class="band-inner">
+        <p class="eyebrow">USE CASES</p>
+        <h2 class="display-sm">Built for every <em>journey.</em></h2>
+        <div class="grid3">
+          <article><h3>Trip planning</h3><p>Check arrival SOC and reserve margin before a long highway run or a winter commute.</p></article>
+          <article><h3>Driver coaching</h3><p>Quantify how speed, driving style and tyre pressure change energy per kilometre.</p></article>
+          <article><h3>Engineering what-ifs</h3><p>Compare a baseline against a modified scenario across energy, range and faults.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="about" class="band">
+      <div class="band-inner about">
+        <div>
+          <p class="eyebrow">ABOUT</p>
+          <h2 class="display-sm">A cleaner <em>tomorrow.</em></h2>
+        </div>
+        <p>KINETIQ is an educational EV energy simulator. Outputs are model estimates from published-style vehicle parameters, not manufacturer data or live telemetry.</p>
+        <a class="btn btn-gold btn-lg" href="/simulator/">Launch Simulator <span class="arrow">→</span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot"><span>© KINETIQ</span><span>EV Intelligence Simulator</span></footer>
+
+  <script type="module" src="/src/landing.ts"></script>
+</body>
+</html>

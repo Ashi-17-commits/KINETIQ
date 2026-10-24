@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scenarios — KINETIQ</title>
+  <meta name="description" content="Compare KINETIQ EV scenarios." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body class="sim">
+  <aside class="side" aria-label="Dashboard navigation"></aside>
+  <main class="sim-main" id="top">
+    <header class="sim-head">
+      <div>
+        <h1 class="sim-title">Scenarios</h1>
+        <p class="sim-sub">Compare different configurations and driving conditions.</p>
+      </div>
+      <div class="head-actions"><span id="badge"></span><a class="btn btn-gold run-btn" href="/simulator/">＋ New Scenario</a></div>
+    </header>
+    <nav class="view-tabs" role="tablist" aria-label="Scenario views">
+      <button type="button" role="tab" id="st-compare" aria-controls="sv-compare" aria-selected="true">Scenario Comparison</button>
+      <button type="button" role="tab" id="st-saved" aria-controls="sv-saved" aria-selected="false" tabindex="-1">Saved Scenarios</button>
+    </nav>
+    <div id="sv-compare" role="tabpanel" aria-labelledby="st-compare">
+      <div class="scen-top">
+        <div class="scen-card" id="card-a"></div>
+        <div class="scen-card" id="card-b"></div>
+        <section class="panel diffs" aria-labelledby="diff-title"><h2 class="panel-title" id="diff-title">Key Differences</h2><ul class="diff-list" id="diffs"></ul></section>
+      </div>
+      <section class="panel compare-panel" aria-labelledby="cmp-title">
+        <div class="panel-head"><h2 class="panel-title" id="cmp-title">Comparison Results</h2>
+          <div class="metric-tabs" role="group" aria-label="Chart metric">
+            <button type="button" data-m="energy" aria-pressed="true">Energy Consumption</button>
+            <button type="button" data-m="range" aria-pressed="false">Range</button>
+            <button type="button" data-m="time" aria-pressed="false">Travel Time</button>
+          </div></div>
+        <div class="compare-grid">
+          <div class="cmp-chart" id="cmp-chart"></div>
+          <div class="metrics"><h3>Performance Metrics</h3><table class="compare" id="metrics"></table></div>
+        </div>
+      </section>
+    </div>
+    <div id="sv-saved" role="tabpanel" aria-labelledby="st-saved" hidden>
+      <section class="panel empty-state"><h2 class="panel-title">No saved scenarios yet</h2><p>Saving scenarios will be available once backend storage is connected. Use the Simulator's baseline comparison in the meantime.</p><a class="btn btn-ghost btn-xs" href="/simulator/#scenarios">Open baseline comparison</a></section>
+    </div>
+    <footer class="foot"><span>© KINETIQ</span><span>Illustrative sample data — not live telemetry</span></footer>
+  </main>
+  <script type="module" src="/src/scenarios.ts"></script>
+</body>
+</html>

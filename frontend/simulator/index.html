@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulator — KINETIQ</title>
+  <meta name="description" content="Configure driving conditions and estimate EV energy use, state of charge, faults and recommendations." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="preload" as="image" href="/img/ev-cad.jpg" />
+</head>
+<body class="sim">
+  <aside class="side" aria-label="Simulator navigation">
+    <a class="side-brand" href="/" aria-label="KINETIQ home"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span>KINETIQ</a>
+    <nav class="side-nav">
+      <a href="/"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9h-6v-6H9v6H3z"/></svg>Home</a>
+      <a href="#top" class="active" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Simulator</a>
+      <a href="/scenarios/"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg>Scenarios</a>
+      <a href="/insights/"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-3.5 10.9V17h7v-3.1A6 6 0 0 0 12 3zM9.5 21h5"/></svg>Insights</a>
+    </nav>
+    <nav class="side-foot">
+      <a href="/#about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17.5v.01"/></svg>Help</a>
+    </nav>
+  </aside>
+
+  <main class="sim-main" id="top">
+    <header class="sim-head">
+      <div>
+        <h1 class="sim-title">Simulator</h1>
+        <p class="sim-sub">Model. Drive. Optimise. For a cleaner tomorrow.</p>
+      </div>
+      <div class="head-actions">
+        <label class="preset"><span>Preset</span>
+          <select id="preset">
+            <option value="custom">Custom</option>
+            <option value="city">City Drive</option>
+            <option value="highway">Highway</option>
+            <option value="winter">Winter</option>
+            <option value="mountain">Mountain</option>
+          </select>
+        </label>
+        <button class="btn btn-gold run-btn" id="run" type="button"><span class="run-ic" aria-hidden="true"></span><span class="run-label">Run Simulation</span></button>
+      </div>
+    </header>
+
+    <nav class="view-tabs" role="tablist" aria-label="Simulator modules">
+      <button type="button" role="tab" id="vt-drive" aria-controls="view-drive" aria-selected="true">Drive</button>
+      <button type="button" role="tab" id="vt-route" aria-controls="view-route" aria-selected="false" tabindex="-1">Path Planning</button>
+    </nav>
+
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+
+    <div id="view-drive" role="tabpanel" aria-labelledby="vt-drive">
+    <div class="dash">
+      <section class="panel inputs" aria-labelledby="inputs-title">
+        <h2 id="inputs-title" class="panel-title">Vehicle &amp; Driving Inputs</h2>
+        <div class="tabs" role="tablist" aria-label="Input groups"></div>
+        <form id="controls" aria-label="Driving conditions"></form>
+        <button type="button" class="reset-link" id="reset-inputs">↺ Reset to Defaults</button>
+      </section>
+
+      <section class="panel viewer" aria-label="Vehicle CAD view and live results">
+        <div class="cad">
+          <div class="cad-chips"><span class="chip">CAD View</span><span class="chip-meta" id="engine-src"></span></div>
+          <div class="cad-stage">
+            <img src="/img/ev-cad.jpg" alt="Transparent EV cutaway showing battery pack, motor, inverter and wheels" class="cad-img" />
+            <span class="flow-line" aria-hidden="true"></span>
+            <div class="hot" style="--x:37%;--y:53%" data-k="battery"><i></i><em><small>Battery</small><b>—</b></em></div>
+            <div class="hot hot-l" style="--x:74%;--y:49%" data-k="inverter"><i></i><em><small>Inverter losses</small><b>—</b></em></div>
+            <div class="hot" style="--x:27%;--y:34%" data-k="motor"><i></i><em><small>Motor peak</small><b>—</b></em></div>
+            <div class="hot hot-l" style="--x:63%;--y:72%" data-k="wheels"><i></i><em><small>Regen to pack</small><b>—</b></em></div>
+          </div>
+          <ul class="flow-legend" aria-label="Power flow">
+            <li class="lg-battery">Battery</li><li class="lg-inverter">Inverter</li><li class="lg-motor">Motor</li><li class="lg-wheels">Wheels</li>
+          </ul>
+        </div>
+        <div class="gauges" id="gauges"></div>
+      </section>
+    </div>
+
+    <div class="results" id="results">
+      <div class="panel chart-panel">
+        <div class="panel-head">
+          <h2>State of charge vs distance</h2>
+          <div class="legend"><span class="lg-cur">Current</span><span class="lg-base">Baseline</span></div>
+        </div>
+        <svg id="soc-chart" class="chart" viewBox="0 0 640 240" role="img" aria-label="Simulated state of charge over distance"></svg>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="two" id="insights">
+        <div class="panel">
+          <div class="panel-head"><h2>Where the energy goes</h2><span class="unit">kWh, simulated</span></div>
+          <div id="breakdown" class="breakdown"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Alerts</h2><span class="unit" id="fault-count"></span></div>
+          <ul id="faults" class="faults"></ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Recommendations</h2><span class="unit">each saving is a re-simulation</span></div>
+        <ol id="recs" class="recs"></ol>
+      </div>
+
+      <div class="panel" id="scenarios">
+        <div class="panel-head">
+          <h2>Baseline vs current</h2>
+          <div class="row-actions">
+            <button type="button" class="btn btn-ghost btn-xs" id="reset-base">Reset baseline</button>
+            <button type="button" class="btn btn-gold btn-xs" id="set-base">Set current as baseline</button>
+          </div>
+        </div>
+        <div class="table-wrap"><table id="compare" class="compare"></table></div>
+      </div>
+    </div>
+    </div>
+
+    <div id="view-route" role="tabpanel" aria-labelledby="vt-route" hidden>
+      <div class="route-dash">
+        <section class="panel route-inputs" aria-labelledby="route-title">
+          <h2 id="route-title" class="panel-title">Route Inputs</h2>
+          <form id="route-form" novalidate>
+            <div class="field"><label for="r-start">Start Location</label><div class="loc"><span class="loc-ic" aria-hidden="true"></span><input id="r-start" name="start" class="txt" value="Mumbai, MH" autocomplete="off" required /><button type="button" class="loc-clear" data-clear="r-start" aria-label="Clear start location">×</button></div></div>
+            <div class="field"><label for="r-end">End Location</label><div class="loc"><span class="loc-ic" aria-hidden="true"></span><input id="r-end" name="end" class="txt" value="Pune, MH" autocomplete="off" required /><button type="button" class="loc-clear" data-clear="r-end" aria-label="Clear end location">×</button></div></div>
+            <fieldset class="field seg"><legend>Route Type</legend><div class="seg-row">
+              <label><input type="radio" name="routeType" value="fastest" /><span>Fastest</span></label>
+              <label><input type="radio" name="routeType" value="efficient" checked /><span>Most Efficient</span></label>
+              <label><input type="radio" name="routeType" value="scenic" /><span>Scenic</span></label>
+            </div></fieldset>
+            <label class="field toggle" for="r-elev"><span>Include Elevation Data</span><input type="checkbox" id="r-elev" name="includeElevation" role="switch" checked /><i></i></label>
+            <label class="field toggle" for="r-steep"><span>Avoid Steep Gradients</span><input type="checkbox" id="r-steep" name="avoidSteep" role="switch" checked /><i></i></label>
+            <label class="field toggle" for="r-stations"><span>Show Charging Stations</span><input type="checkbox" id="r-stations" name="showStations" role="switch" checked /><i></i></label>
+            <div class="field"><label for="r-vehicle">Vehicle</label><select id="r-vehicle" name="vehicle" class="txt"><option value="reference">KINETIQ Reference EV (75 kWh)</option></select></div>
+            <div class="field"><label for="r-soc">Current Battery (%)</label><div class="range-row"><input type="range" id="r-soc" name="routeSoc" min="5" max="100" step="1" value="70" /><output class="num" id="r-soc-out" for="r-soc">70</output></div></div>
+            <fieldset class="field manual" id="r-manual">
+              <legend>Known route profile</legend>
+              <p class="hint">No routing service is connected. Enter a distance you know to estimate energy with the current Drive settings.</p>
+              <div class="manual-row">
+                <label>Distance (km)<input type="number" class="num" name="routeDistanceKm" min="1" max="1000" step="1" placeholder="e.g. 150" /></label>
+                <label>Avg gradient (%)<input type="number" class="num" name="routeGradePct" min="-8" max="8" step="0.5" value="0" /></label>
+              </div>
+            </fieldset>
+            <button type="submit" class="btn btn-gold run-btn plan-btn"><span class="run-ic" aria-hidden="true"></span><span class="plan-label">Plan Route</span></button>
+          </form>
+        </section>
+
+        <section class="route-main" aria-label="Route map and elevation">
+          <div class="map">
+            <img src="/images/route-map.png" alt="Illustrative map of a route between Mumbai and Pune" class="map-img" />
+            <div class="map-layers" role="group" aria-label="Map layers">
+              <button type="button" class="layer" aria-pressed="true" disabled>Route</button>
+              <button type="button" class="layer" data-layer="elevation" aria-pressed="true">Elevation</button>
+              <button type="button" class="layer" data-layer="stations" aria-pressed="true">Charging Stations</button>
+            </div>
+            <div class="stations" id="stations" aria-hidden="true"></div>
+            <span class="chip map-chip">Illustrative map · static visual, not a live map</span>
+          </div>
+          <section class="panel elev" id="elev-panel" aria-labelledby="elev-title">
+            <div class="panel-head"><h2 class="panel-title" id="elev-title">Elevation Profile</h2><span id="elev-src"></span></div>
+            <div id="elev-body"></div>
+          </section>
+        </section>
+
+        <div class="route-side">
+          <section class="panel" aria-labelledby="sum-title">
+            <div class="panel-head"><h2 class="panel-title" id="sum-title">Route Summary</h2><span id="sum-src"></span></div>
+            <dl class="sum" id="route-summary"></dl>
+          </section>
+          <section class="panel" aria-labelledby="bat-title">
+            <h2 class="panel-title" id="bat-title">Battery Estimate</h2>
+            <div id="battery-est"></div>
+          </section>
+          <div class="route-status" id="route-status" role="status" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="foot"><span>© KINETIQ</span><span>Model estimates — not live telemetry</span></footer>
+  </main>
+
+  <script type="module" src="/src/simulator.ts"></script>
+</body>
+</html>

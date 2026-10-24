@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Insights — KINETIQ</title>
+  <meta name="description" content="KINETIQ driving and energy insights." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body class="sim">
+  <aside class="side" aria-label="Dashboard navigation"></aside>
+  <main class="sim-main" id="top">
+    <header class="sim-head">
+      <div>
+        <h1 class="sim-title">Insights</h1>
+        <p class="sim-sub">Insights to help you drive smarter.</p>
+      </div>
+      <div class="head-actions"><span id="badge"></span>
+        <label class="preset"><span>Period</span><select id="period"><option value="7d">Last 7 Days</option><option value="30d">Last 30 Days</option></select></label>
+      </div>
+    </header>
+    <div class="kpi-row" id="ins-kpis"></div>
+    <div class="ins-grid">
+      <section class="panel" aria-labelledby="trend-title"><div class="panel-head"><h2 class="panel-title" id="trend-title">Energy Consumption Trend</h2><span class="unit">kWh/100km</span></div><div id="trend"></div></section>
+      <section class="panel" aria-labelledby="mix-title"><h2 class="panel-title" id="mix-title">Driving Breakdown</h2><div class="mix" id="mix"></div></section>
+    </div>
+    <div class="ins-grid">
+      <section class="panel" aria-labelledby="ki-title"><h2 class="panel-title" id="ki-title">Key Insights</h2><ul class="ki-list" id="key-insights"></ul></section>
+      <section class="panel" aria-labelledby="rec-title"><div class="panel-head"><h2 class="panel-title" id="rec-title">Recommendations</h2><button type="button" class="btn btn-ghost btn-xs" id="view-all" aria-expanded="false">View All</button></div><ul class="rec-list" id="rec-list"></ul></section>
+    </div>
+    <footer class="foot"><span>© KINETIQ</span><span>Illustrative sample data — not live telemetry</span></footer>
+  </main>
+  <script type="module" src="/src/insights.ts"></script>
+</body>
+</html>
