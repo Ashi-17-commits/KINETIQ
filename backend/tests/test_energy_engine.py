@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -69,10 +70,37 @@ def test_unit_conversions(vehicle):
     assert out.aerodynamic_drag_force_n == pytest.approx(f_drag, rel=1e-6)
 
 
-def test_non_positive_wheel_power_uses_auxiliary(vehicle):
+def test_negative_wheel_power_regenerates(vehicle):
     out = compute_energy(EnergyInputs(60, -15, 10), vehicle)
-    if out.wheel_power_kw <= 0:
-        assert out.battery_power_kw == pytest.approx(vehicle.auxiliary_power_kw)
+    assert out.wheel_power_kw < 0
+    braking_kw = -out.wheel_power_kw
+    regen_wheel_kw = min(braking_kw, vehicle.max_regen_power_kw)
+    expected = -regen_wheel_kw * vehicle.regen_efficiency + vehicle.auxiliary_power_kw
+    assert out.battery_power_kw == pytest.approx(expected)
+    assert out.battery_power_kw < 0  # net charging on a steep descent
+    assert out.regenerated_energy_kwh > 0
+    assert out.friction_braking_energy_kwh == pytest.approx(max(0.0, braking_kw - regen_wheel_kw) / 6)
+
+
+def test_regen_disabled_matches_previous_auxiliary_only_behaviour(vehicle):
+    no_regen = replace(vehicle, max_regen_power_kw=0.0)
+    out = compute_energy(EnergyInputs(60, -15, 10), no_regen)
+    assert out.battery_power_kw == pytest.approx(vehicle.auxiliary_power_kw)
+    assert out.regenerated_energy_kwh == 0
+
+
+def test_regen_capped_by_max_power(vehicle):
+    capped = replace(vehicle, max_regen_power_kw=5.0)
+    out = compute_energy(EnergyInputs(60, -15, 10), capped)
+    assert out.peak_regen_power_kw == pytest.approx(5.0 * vehicle.regen_efficiency)
+    assert out.friction_braking_energy_kwh > 0
+
+
+def test_steady_energy_breakdown_sums_to_net(vehicle):
+    for grade in (-15, -2, 0, 5):
+        out = compute_energy(EnergyInputs(60, grade, 10), vehicle)
+        net = out.traction_energy_kwh - out.regenerated_energy_kwh + out.auxiliary_energy_kwh
+        assert out.requested_energy_kwh == pytest.approx(net)
 
 
 def test_energy_distance_consistency(vehicle):

@@ -67,3 +67,29 @@ export interface SimulationResponse {
 ## Compare / sustainability
 
 Use `sustainability.estimated_model_energy_reduction_percent` with the disclaimer from `estimated_model_energy_reduction_note`.
+
+## Simulated traffic profiles (optional, additive)
+
+Request fields (both optional; omitting them keeps the original steady-speed behaviour):
+
+- `traffic_profile`: `"steady"` (default) | `"free_flow"` | `"moderate_congestion"` | `"stop_and_go"`.
+  For non-steady profiles `speed_kmh` is the free-flow **target** speed; the backend generates a
+  synthetic, acceleration-limited speed trace (1 s steps) and integrates energy over it.
+- `traffic_seed`: integer ≥ 0 for a reproducible pattern (default seed 0).
+
+**Traffic is always simulated.** `response.traffic.data_source` is `"simulated"` and
+`is_real_world_data` is `false`. Never present it as live traffic.
+
+New response fields (all optional in the schema):
+
+- `traffic`: profile, seed, target/average/max speed, stop count, idle time, acceleration stats, note.
+- `physics`: `aggregation` (`steady_state` | `drive_cycle_average`), `traction_energy_kwh`,
+  `regenerated_energy_kwh`, `friction_braking_energy_kwh`, `auxiliary_energy_kwh`,
+  `peak_battery_power_kw`, `peak_regen_power_kw`.
+  For drive cycles, forces are distance-weighted averages and powers are time averages.
+- `battery`: `remaining_energy_kwh`, `estimated_remaining_range_km`, `remaining_range_note`,
+  `regen_energy_not_stored_kwh`, `depletion_elapsed_minutes`.
+
+Behaviour change: regenerative braking is now modelled. On steep descents `requested_energy_kwh`
+and `consumption_kwh_per_100km` can be **negative** (net charging); range is then `null` with a note.
+Set `vehicle_parameters.max_regen_power_kw = 0` to reproduce the old no-regen result.

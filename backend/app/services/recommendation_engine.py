@@ -91,7 +91,7 @@ def build_recommendations(
                 title="Uphill grade adds resistance",
                 explanation=(
                     f"Positive road gradient ({gradient_percent:.1f}%) increases grade resistance "
-                    f"({physics.grade_resistance_force_n:.1f} N) in the steady-speed model."
+                    f"({physics.grade_resistance_force_n:.1f} N) in the simulation model."
                 ),
                 value=physics.grade_resistance_force_n,
                 unit="N",
@@ -226,7 +226,7 @@ def build_recommendations(
                 priority="low",
                 title="Scenario within nominal simulation bounds",
                 explanation=(
-                    f"Steady-speed model produced {physics.requested_energy_kwh:.3f} kWh demand "
+                    f"The {'steady-speed' if physics.aggregation == 'steady_state' else 'simulated-traffic'} model produced {physics.requested_energy_kwh:.3f} kWh demand "
                     f"over {physics.distance_km:.3f} km."
                 ),
                 value=physics.consumption_kwh_per_100km,

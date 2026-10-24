@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.core.config import InputBounds
-from app.models.domain_types import ObstacleSource, RoadSurface
+from app.core.config import TRAFFIC_SEED_MAX, InputBounds
+from app.models.domain_types import ObstacleSource, RoadSurface, TrafficProfile
 
 
 def _finite(v: float, name: str) -> float:
@@ -33,6 +33,10 @@ class VehicleParametersOverride(BaseModel):
     drivetrain_efficiency: Optional[float] = Field(None, description="Drivetrain efficiency [-]")
     auxiliary_power_kw: Optional[float] = Field(None, description="Auxiliary load [kW]")
     usable_battery_capacity_kwh: Optional[float] = Field(None, description="Usable battery capacity [kWh]")
+    regen_efficiency: Optional[float] = Field(None, description="Wheel-to-battery regen efficiency [-]")
+    max_regen_power_kw: Optional[float] = Field(None, description="Max recoverable braking power at wheels [kW]")
+    regen_min_speed_kmh: Optional[float] = Field(None, description="Regen cut-off speed [km/h]")
+    rotational_inertia_factor: Optional[float] = Field(None, description="Rotating-mass factor (>= 1) [-]")
 
 
 class SimulationScenarioRequest(BaseModel):
@@ -51,6 +55,19 @@ class SimulationScenarioRequest(BaseModel):
         description="Required when obstacle_distance_m is set",
     )
     duration_minutes: float = Field(10.0, description="Simulation duration [min]")
+    traffic_profile: TrafficProfile = Field(
+        "steady",
+        description=(
+            "Simulated traffic pattern. 'steady' = constant speed_kmh. Other profiles generate a synthetic "
+            "speed trace where speed_kmh is the free-flow target speed. Never live traffic data."
+        ),
+    )
+    traffic_seed: Optional[int] = Field(
+        None,
+        ge=0,
+        le=TRAFFIC_SEED_MAX,
+        description="Seed for the synthetic traffic pattern (reproducible); null uses the default seed.",
+    )
     vehicle_parameters: Optional[VehicleParametersOverride] = None
     path_planning: Optional[PathPlanningInput] = Field(
         None,
@@ -187,6 +204,14 @@ class PhysicsResultSchema(BaseModel):
     distance_km: float
     consumption_kwh_per_100km: Optional[float]
     consumption_unavailable_reason: Optional[str]
+    # Additive fields (optional so older stored results still validate).
+    aggregation: Optional[Literal["steady_state", "drive_cycle_average"]] = None
+    traction_energy_kwh: Optional[float] = None
+    regenerated_energy_kwh: Optional[float] = None
+    friction_braking_energy_kwh: Optional[float] = None
+    auxiliary_energy_kwh: Optional[float] = None
+    peak_battery_power_kw: Optional[float] = None
+    peak_regen_power_kw: Optional[float] = None
 
 
 class BatteryResultSchema(BaseModel):
@@ -201,6 +226,29 @@ class BatteryResultSchema(BaseModel):
     battery_state: str
     depletion_note: Optional[str]
     trip_completed_in_model: bool
+    remaining_energy_kwh: Optional[float] = None
+    estimated_remaining_range_km: Optional[float] = None
+    remaining_range_note: Optional[str] = None
+    regen_energy_not_stored_kwh: Optional[float] = None
+    depletion_elapsed_minutes: Optional[float] = None
+
+
+class TrafficSummarySchema(BaseModel):
+    profile: TrafficProfile
+    data_source: Literal["simulated"]
+    is_real_world_data: Literal[False]
+    description: str
+    seed: Optional[int]
+    target_speed_kmh: float
+    average_speed_kmh: float
+    max_speed_kmh: float
+    stop_count: int
+    idle_time_s: float
+    max_acceleration_m_s2: float
+    max_deceleration_m_s2: float
+    rms_acceleration_m_s2: float
+    time_step_s: Optional[float]
+    note: str
 
 
 class TelemetrySchema(BaseModel):
@@ -218,6 +266,9 @@ class TelemetrySchema(BaseModel):
     gradient_percent: float
     road_surface: RoadSurface
     status: str
+    traffic_profile: Optional[TrafficProfile] = None
+    traffic_data_source: Optional[Literal["simulated"]] = None
+    estimated_remaining_range_km: Optional[float] = None
 
 
 class PathPlanningIntegrationSchema(BaseModel):
@@ -237,6 +288,7 @@ class SimulationResponse(BaseModel):
     physics: PhysicsResultSchema
     battery: BatteryResultSchema
     telemetry: TelemetrySchema
+    traffic: Optional[TrafficSummarySchema] = None
     events: List[SimulationEventSchema]
     recommendations: List[RecommendationSchema]
     path_planning_integration: PathPlanningIntegrationSchema

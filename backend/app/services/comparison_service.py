@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from typing import Any, List, Optional, Tuple
 
-from app.services.energy_engine import EnergyInputs, compute_energy
-from app.services.simulation_service import SimulationService, merge_vehicle_params, _vehicle_from_dict
+from app.services.simulation_service import (
+    SimulationService,
+    _vehicle_from_dict,
+    compute_scenario_physics,
+    merge_vehicle_params,
+)
 
 
 def _pct_diff(baseline: Optional[float], comparison: Optional[float]) -> Tuple[Optional[float], Optional[str]]:
@@ -57,6 +61,8 @@ def _scenario_slice(scenario: dict) -> dict:
         "obstacle_distance_m": scenario.get("obstacle_distance_m"),
         "obstacle_source": scenario.get("obstacle_source"),
         "duration_minutes": scenario.get("duration_minutes"),
+        "traffic_profile": scenario.get("traffic_profile") or "steady",
+        "traffic_seed": scenario.get("traffic_seed"),
     }
     if scenario.get("vehicle_parameters"):
         out["vehicle_parameters"] = scenario["vehicle_parameters"]
@@ -66,14 +72,7 @@ def _scenario_slice(scenario: dict) -> dict:
 def _baseline_physics_for(scenario: dict):
     vehicle_dict = merge_vehicle_params(scenario.get("vehicle_parameters"))
     vehicle = _vehicle_from_dict(vehicle_dict)
-    return compute_energy(
-        EnergyInputs(
-            speed_kmh=scenario["speed_kmh"],
-            gradient_percent=scenario["gradient_percent"],
-            duration_minutes=scenario["duration_minutes"],
-        ),
-        vehicle,
-    )
+    return compute_scenario_physics(scenario, vehicle)
 
 
 def _explain_change(field: str, baseline: Any, comparison: Any) -> str:
@@ -85,6 +84,11 @@ def _explain_change(field: str, baseline: Any, comparison: Any) -> str:
         "battery_temperature_c": "Temperature affects warning events only; not energy physics in this MVP.",
         "road_surface": "Road surface is recorded; energy effect is not_modelled in this MVP.",
         "obstacle_distance_m": "Obstacle distance affects proximity warnings only, not energy physics.",
+        "traffic_profile": (
+            "Simulated traffic changes the speed trace: acceleration adds inertial demand, braking is partly "
+            "recovered by regen, lower average speed reduces drag, and idle time adds auxiliary energy."
+        ),
+        "traffic_seed": "A different seed produces a different synthetic traffic pattern with the same statistics.",
     }
     if field in explanations:
         return explanations[field]

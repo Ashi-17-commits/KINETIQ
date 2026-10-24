@@ -7,6 +7,7 @@ from typing import Literal
 
 RoadSurface = Literal["dry", "wet", "slippery"]
 ObstacleSource = Literal["user_input", "simulated_scenario"]
+TrafficProfile = Literal["steady", "free_flow", "moderate_congestion", "stop_and_go"]
 
 
 class RoadSurfaceEnum(str, Enum):
