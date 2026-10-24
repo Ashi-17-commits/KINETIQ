@@ -1,0 +1,1 @@
+"""KINETIQ backend application package."""
