@@ -1,10 +1,12 @@
 /**
- * Simulation client. With VITE_API_URL set, results come from the FastAPI backend
- * (POST {VITE_API_URL}/api/simulate → { result, recommendations }); otherwise the
- * deterministic in-browser engine runs. API failures are surfaced as errors, never
- * silently replaced with local numbers.
+ * Simulation client.
+ *  - VITE_API_URL unset: the deterministic in-browser engine (src/engine.ts) runs.
+ *  - VITE_API_URL set:   POST {VITE_API_URL}/api/v1/simulate (FastAPI backend, see
+ *    backend/docs/FRONTEND_API.md). The request is mapped from the UI's Conditions and the
+ *    SimulationResponse is mapped back into the UI's Result using only backend values.
+ * API failures are surfaced as errors, never silently replaced with local numbers.
  */
-import { simulate, recommend, type Conditions, type Result, type Recommendation } from './engine.ts';
+import { simulate, recommend, type Conditions, type Result, type Recommendation, type Fault } from './engine.ts';
 
 export interface SimResponse { result: Result; recommendations: Recommendation[] }
 export type EngineSource = 'api' | 'local';
@@ -14,11 +16,112 @@ export const ENGINE_SOURCE: EngineSource = API_URL ? 'api' : 'local';
 
 export class SimError extends Error {}
 
-function isResponse(x: unknown): x is SimResponse {
-  const r = (x as SimResponse)?.result;
-  return !!r && Array.isArray((x as SimResponse).recommendations) &&
-    ['energyKwh', 'whPerKm', 'endSocPct', 'estRangeKm', 'durationMin', 'avgKmh', 'peakKw'].every((k) => Number.isFinite((r as never)[k])) &&
-    Array.isArray(r.trace) && Array.isArray(r.faults) && !!r.breakdownKwh;
+/* ---------- Backend contract (subset of backend/app/api/schemas.py) ---------- */
+interface ApiScenario {
+  scenario_name?: string;
+  speed_kmh: number;
+  initial_soc_percent: number;
+  battery_temperature_c: number;
+  gradient_percent: number;
+  road_surface: 'dry' | 'wet' | 'slippery';
+  duration_minutes: number;
+}
+interface ApiSimulation {
+  simulation_id: string;
+  status: string;
+  vehicle_parameters: Record<string, number>;
+  physics: {
+    rolling_resistance_force_n: number; aerodynamic_drag_force_n: number; grade_resistance_force_n: number;
+    wheel_power_kw: number; battery_power_kw: number; requested_energy_kwh: number; distance_km: number;
+    consumption_kwh_per_100km: number | null; consumption_unavailable_reason: string | null;
+  };
+  battery: {
+    initial_soc_percent: number; final_soc_percent: number; usable_battery_capacity_kwh: number;
+    available_energy_kwh: number; requested_energy_kwh: number; battery_depleted: boolean;
+  };
+  events: { event_id: string; event_type: string; severity: string; message: string; suggested_action: string }[];
+  recommendations: { title: string; explanation: string; suggested_action: string }[];
+}
+
+/** Conditions → backend scenario. The backend models steady speed over a duration, so
+ *  duration = distance / speed; pack temperature is taken as ambient; gravel/snow → slippery. */
+export function toApiScenario(c: Conditions): ApiScenario {
+  return {
+    speed_kmh: c.cruiseKmh,
+    initial_soc_percent: c.initialSocPct,
+    battery_temperature_c: c.ambientC,
+    gradient_percent: c.gradePct,
+    road_surface: c.surface === 'dry' || c.surface === 'wet' ? c.surface : 'slippery',
+    duration_minutes: Math.min(24 * 60, (c.distanceKm / Math.max(c.cruiseKmh, 1)) * 60),
+  };
+}
+
+const SEVERITY: Record<string, Fault['severity']> = { CRITICAL: 'critical', WARNING: 'warning', INFO: 'info' };
+const J_PER_KWH = 3.6e6;
+
+/** Backend SimulationResponse → UI Result. Quantities the backend does not model
+ *  (regen, acceleration, pack I²R, stop-start trace) are reported as zero, not invented. */
+export function fromApiSimulation(s: ApiSimulation, c: Conditions): SimResponse {
+  const p = s.physics, b = s.battery;
+  if (p.consumption_kwh_per_100km == null || !Number.isFinite(p.consumption_kwh_per_100km)) {
+    throw new SimError(`Backend could not compute consumption${p.consumption_unavailable_reason ? `: ${p.consumption_unavailable_reason}` : ''}.`);
+  }
+  const whPerKm = p.consumption_kwh_per_100km * 10;
+  const distM = p.distance_km * 1000;
+  const wheel = (f: number) => Math.max(0, f) * distM / J_PER_KWH;
+  const durationMin = (c.distanceKm / Math.max(c.cruiseKmh, 1)) * 60;
+  const auxKw = s.vehicle_parameters.auxiliary_power_kw ?? 0;
+  const aux = auxKw * durationMin / 60;
+  const aero = wheel(p.aerodynamic_drag_force_n), rolling = wheel(p.rolling_resistance_force_n), grade = wheel(p.grade_resistance_force_n);
+  const capacity = b.usable_battery_capacity_kwh;
+  const depletedAtKm = b.battery_depleted && whPerKm > 0 ? (b.available_energy_kwh * 1000) / whPerKm : null;
+
+  const result: Result = {
+    inputs: { ...c },
+    energyKwh: b.requested_energy_kwh,
+    whPerKm,
+    endSocPct: b.final_soc_percent,
+    usableKwh: capacity,
+    estRangeKm: whPerKm > 0 ? (capacity * 1000) / whPerKm : 0,
+    durationMin,
+    avgKmh: c.cruiseKmh,
+    peakKw: p.battery_power_kw,
+    peakCRate: capacity > 0 ? p.battery_power_kw / capacity : 0,
+    depletedAtKm,
+    breakdownKwh: {
+      aero, rolling, grade, inertia: 0, aux, packLoss: 0, regen: 0,
+      driveLoss: Math.max(0, b.requested_energy_kwh - aero - rolling - grade - aux),
+    },
+    // Steady power ⇒ SOC falls linearly; these two points are exact for the backend model.
+    trace: [
+      { km: 0, soc: b.initial_soc_percent, kmh: c.cruiseKmh, kw: p.battery_power_kw },
+      ...(depletedAtKm !== null ? [{ km: depletedAtKm, soc: 0, kmh: c.cruiseKmh, kw: p.battery_power_kw }] : []),
+      { km: p.distance_km, soc: b.final_soc_percent, kmh: c.cruiseKmh, kw: p.battery_power_kw },
+    ],
+    faults: s.events.map((e) => ({
+      id: e.event_id, severity: SEVERITY[e.severity] ?? 'info',
+      title: e.event_type.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (m) => m.toUpperCase()),
+      detail: `${e.message} ${e.suggested_action}`.trim(),
+    })),
+  };
+  const recommendations: Recommendation[] = s.recommendations.map((r) => ({
+    title: r.title, detail: `${r.explanation} ${r.suggested_action}`.trim(), savingWhKm: NaN, savingPct: NaN,
+  }));
+  return { result, recommendations };
+}
+
+function isApiSimulation(x: unknown): x is ApiSimulation {
+  const s = x as ApiSimulation;
+  return !!s && typeof s === 'object' && !!s.physics && !!s.battery && Array.isArray(s.events) && Array.isArray(s.recommendations) &&
+    ['requested_energy_kwh', 'final_soc_percent', 'usable_battery_capacity_kwh', 'initial_soc_percent'].every((k) => Number.isFinite((s.battery as never)[k])) &&
+    ['distance_km', 'battery_power_kw', 'aerodynamic_drag_force_n'].every((k) => Number.isFinite((s.physics as never)[k]));
+}
+
+function detailText(detail: unknown): string {
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) return detail.map((d) => (d as { msg?: string })?.msg).filter(Boolean).join('; ');
+  if (detail && typeof detail === 'object' && 'message' in detail) return String((detail as { message: unknown }).message);
+  return '';
 }
 
 export async function runSimulation(c: Conditions, signal?: AbortSignal): Promise<SimResponse> {
@@ -29,10 +132,10 @@ export async function runSimulation(c: Conditions, signal?: AbortSignal): Promis
   const timeout = AbortSignal.timeout(15000);
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/api/simulate`, {
+    res = await fetch(`${API_URL}/api/v1/simulate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(c),
+      body: JSON.stringify(toApiScenario(c)),
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
   } catch (e) {
@@ -40,12 +143,12 @@ export async function runSimulation(c: Conditions, signal?: AbortSignal): Promis
     throw new SimError(timeout.aborted ? 'The simulation service timed out.' : 'Cannot reach the simulation service.');
   }
   if (!res.ok) {
-    const detail = await res.json().then((j) => j?.detail, () => null);
-    throw new SimError(`Simulation service error ${res.status}${typeof detail === 'string' ? `: ${detail}` : ''}.`);
+    const detail = detailText(await res.json().then((j) => j?.detail, () => null));
+    throw new SimError(`Simulation service error ${res.status}${detail ? `: ${detail}` : ''}.`);
   }
   const body: unknown = await res.json().catch(() => null);
-  if (!isResponse(body)) throw new SimError('The simulation service returned an unexpected response.');
-  return body;
+  if (!isApiSimulation(body)) throw new SimError('The simulation service returned an unexpected response.');
+  return fromApiSimulation(body, c);
 }
 
 /* ---------- Path planning (requires backend) ----------
@@ -69,7 +172,8 @@ export interface RouteResponse {
   socUsedPct: number;
   elevation?: { km: number; m: number }[];
 }
-export const ROUTING_AVAILABLE = !!API_URL;
+// The backend reserves path_planning but exposes no routing endpoint yet (see /api/v1/config).
+export const ROUTING_AVAILABLE = false;
 
 export async function planRoute(req: RouteRequest, signal?: AbortSignal): Promise<RouteResponse> {
   if (!API_URL) throw new SimError('No routing service is connected.');

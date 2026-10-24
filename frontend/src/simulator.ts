@@ -275,7 +275,7 @@ function renderFaults() {
 function renderRecs() {
   if (!result) { $('#recs').innerHTML = ''; return; }
   $('#recs').innerHTML = recs.length
-    ? recs.map((r) => `<li><div><b>${esc(r.title)}</b><p>${esc(r.detail)}</p></div><span class="save">−${fmt(r.savingWhKm)} Wh/km<small>${fmt(r.savingPct, 1)}%</small></span></li>`).join('')
+    ? recs.map((r) => `<li><div><b>${esc(r.title)}</b><p>${esc(r.detail)}</p></div>${Number.isFinite(r.savingWhKm) ? `<span class="save">−${fmt(r.savingWhKm)} Wh/km<small>${fmt(r.savingPct, 1)}%</small></span>` : ''}</li>`).join('')
     : '<li class="none"><div><b>Already efficient</b><p>No single change tested saves more than 1% for this scenario.</p></div></li>';
 }
 
